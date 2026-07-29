@@ -157,6 +157,16 @@ function cacheKey(sub: string, sort: string, after: string) {
   return `${sub.toLowerCase()}:${sort}:${after || "start"}`;
 }
 
+function normalizeListing(payload: RedditListingResult): RedditListingResult {
+  return {
+    ...payload,
+    items: payload.items.map((item) => ({
+      ...item,
+      url: normalizeImageUrl(decodeHtmlEntities(item.url)),
+    })),
+  };
+}
+
 function readCache(key: string, maxAge = CACHE_TTL) {
   const hit = cache.get(key);
   if (!hit) return null;
@@ -165,7 +175,8 @@ function readCache(key: string, maxAge = CACHE_TTL) {
 }
 
 function writeCache(key: string, payload: RedditListingResult) {
-  const body = JSON.stringify(payload);
+  const normalized = normalizeListing(payload);
+  const body = JSON.stringify(normalized);
   cache.set(key, { at: Date.now(), body });
   return body;
 }
@@ -236,7 +247,10 @@ export async function fetchRedditListing(opts: FetchListingOptions): Promise<Fet
   const key = cacheKey(sub, sort, after);
 
   const fresh = readCache(key, CACHE_TTL);
-  if (fresh) return { body: fresh.body, cache: "hit" };
+  if (fresh) {
+    const fixed = normalizeListing(JSON.parse(fresh.body) as RedditListingResult);
+    return { body: JSON.stringify(fixed), cache: "hit" };
+  }
 
   let payload: RedditListingResult | null = null;
   let rateLimited = false;
@@ -263,7 +277,10 @@ export async function fetchRedditListing(opts: FetchListingOptions): Promise<Fet
   }
 
   const stale = readCache(key, STALE_TTL);
-  if (stale) return { body: stale.body, cache: "stale" };
+  if (stale) {
+    const fixed = normalizeListing(JSON.parse(stale.body) as RedditListingResult);
+    return { body: JSON.stringify(fixed), cache: "stale" };
+  }
 
   if (rateLimited) {
     throw new ListingError("Reddit is rate limiting right now. Try again in a minute.", 429);

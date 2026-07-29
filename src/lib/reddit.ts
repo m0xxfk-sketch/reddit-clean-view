@@ -1,6 +1,3 @@
-import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
-
 export type RedditImage = {
   id: string;
   title: string;
@@ -15,31 +12,36 @@ export type RedditImage = {
   created: number;
 };
 
-const inputSchema = z.object({
-  subreddit: z.string().min(1).max(50),
-  sort: z.enum(["hot", "new", "top", "rising"]).default("hot"),
-  after: z.string().nullable().optional(),
-});
+export type Sort = "hot" | "new" | "top" | "rising";
+
+export type FetchArgs = {
+  subreddit: string;
+  sort: Sort;
+  after?: string | null;
+};
 
 function decode(s: string) {
   return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"');
 }
 
-export const fetchSubredditImages = createServerFn({ method: "GET" })
-  .inputValidator((data: unknown) => inputSchema.parse(data))
-  .handler(async ({ data }) => {
+export async function fetchSubredditImages(data: FetchArgs) {
     const sub = data.subreddit.replace(/[^a-zA-Z0-9_]/g, "");
+    if (!sub) throw new Error("Enter a subreddit name.");
     const params = new URLSearchParams({ limit: "50", raw_json: "1" });
     if (data.sort === "top") params.set("t", "week");
     if (data.after) params.set("after", data.after);
 
     const res = await fetch(
       `https://www.reddit.com/r/${sub}/${data.sort}.json?${params.toString()}`,
-      { headers: { "User-Agent": "web:clean-image-viewer:1.0 (by /u/anonymous)", Accept: "application/json" } },
-    );
+      { headers: { Accept: "application/json" } },
+    ).catch(() => {
+      throw new Error("Couldn't reach Reddit. Check your connection or any content blockers.");
+    });
 
     if (res.status === 404) throw new Error(`r/${sub} was not found.`);
-    if (res.status === 403) throw new Error(`r/${sub} is private or quarantined.`);
+    if (res.status === 403)
+      throw new Error(`r/${sub} is private, quarantined, or blocking anonymous access.`);
+    if (res.status === 429) throw new Error("Reddit is rate limiting. Wait a moment and retry.");
     if (!res.ok) throw new Error(`Reddit responded with ${res.status}. Try again in a moment.`);
 
     const json = (await res.json()) as any;
@@ -88,4 +90,4 @@ export const fetchSubredditImages = createServerFn({ method: "GET" })
     }
 
     return { items, after: (json?.data?.after as string | null) ?? null };
-  });
+}

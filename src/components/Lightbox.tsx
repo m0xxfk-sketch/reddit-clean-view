@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { ChevronLeft, ChevronRight, X, ExternalLink } from "lucide-react";
-import type { RedditImage } from "@/lib/reddit.functions";
+import type { RedditImage } from "@/lib/reddit";
 
 export function Lightbox({
   items,

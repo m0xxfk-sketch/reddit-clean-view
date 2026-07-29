@@ -305,7 +305,11 @@ export async function fetchRedditMix(
 ): Promise<RedditListingResult & { sources: string[] }> {
   const mixKey = `mix:${sort}:${subs.join(",")}`;
   const fresh = readCache(mixKey, CACHE_TTL);
-  if (fresh) return { ...JSON.parse(fresh.body), sources: JSON.parse(fresh.body).sources ?? [] };
+  if (fresh) {
+    const parsed = JSON.parse(fresh.body) as RedditListingResult & { sources?: string[] };
+    const fixed = normalizeListing(parsed);
+    return { ...fixed, sources: parsed.sources ?? [] };
+  }
 
   const batches: { sub: string; items: Item[] }[] = [];
   for (const sub of subs) {

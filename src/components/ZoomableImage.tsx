@@ -3,6 +3,8 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 const MIN_SCALE = 1;
 const MAX_SCALE = 5;
 
+export type FitMode = "contain" | "cover";
+
 export type ZoomableImageHandle = {
   zoomIn: () => void;
   zoomOut: () => void;
@@ -13,12 +15,14 @@ type Props = {
   src: string;
   alt: string;
   className?: string;
+  fit?: FitMode;
   onZoomChange?: (scale: number) => void;
+  onSwipe?: (direction: "left" | "right") => void;
 };
 
-/** Pan/zoom image surface — wheel, drag, double-click, and pinch. */
+/** Pan/zoom image surface — wheel, drag, double-click, pinch, and swipe navigation. */
 export const ZoomableImage = forwardRef<ZoomableImageHandle, Props>(function ZoomableImage(
-  { src, alt, className, onZoomChange },
+  { src, alt, className, fit = "contain", onZoomChange, onSwipe },
   ref,
 ) {
   const surfaceRef = useRef<HTMLDivElement>(null);
@@ -26,6 +30,7 @@ export const ZoomableImage = forwardRef<ZoomableImageHandle, Props>(function Zoo
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const drag = useRef<{ active: boolean; x: number; y: number }>({ active: false, x: 0, y: 0 });
   const pinch = useRef<{ dist: number; scale: number } | null>(null);
+  const swipe = useRef<{ x: number; y: number; t: number } | null>(null);
 
   const applyScale = useCallback(
     (next: number) => {
@@ -103,7 +108,10 @@ export const ZoomableImage = forwardRef<ZoomableImageHandle, Props>(function Zoo
   }, [zoomAt]);
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (scale <= 1) return;
+    if (scale <= 1) {
+      swipe.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+      return;
+    }
     drag.current = { active: true, x: e.clientX - offset.x, y: e.clientY - offset.y };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
@@ -113,8 +121,18 @@ export const ZoomableImage = forwardRef<ZoomableImageHandle, Props>(function Zoo
     setOffset({ x: e.clientX - drag.current.x, y: e.clientY - drag.current.y });
   };
 
-  const onPointerUp = () => {
+  const onPointerUp = (e: React.PointerEvent) => {
     drag.current.active = false;
+
+    if (scale <= 1 && swipe.current && onSwipe) {
+      const dx = e.clientX - swipe.current.x;
+      const dy = e.clientY - swipe.current.y;
+      const dt = Date.now() - swipe.current.t;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 500) {
+        onSwipe(dx < 0 ? "left" : "right");
+      }
+    }
+    swipe.current = null;
   };
 
   const onDoubleClick = (e: React.MouseEvent) => {
@@ -129,6 +147,8 @@ export const ZoomableImage = forwardRef<ZoomableImageHandle, Props>(function Zoo
         dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
         scale,
       };
+    } else if (e.touches.length === 1 && scale <= 1) {
+      swipe.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
     }
   };
 
@@ -139,6 +159,23 @@ export const ZoomableImage = forwardRef<ZoomableImageHandle, Props>(function Zoo
       applyScale((dist / pinch.current.dist) * pinch.current.scale);
     }
   };
+
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (scale <= 1 && swipe.current && onSwipe && e.changedTouches.length === 1) {
+      const t = e.changedTouches[0];
+      const dx = t.clientX - swipe.current.x;
+      const dy = t.clientY - swipe.current.y;
+      const dt = Date.now() - swipe.current.t;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 500) {
+        onSwipe(dx < 0 ? "left" : "right");
+      }
+    }
+    pinch.current = null;
+    swipe.current = null;
+  };
+
+  const objectClass = fit === "cover" ? "object-cover" : "object-contain";
+  const sizeClass = fit === "cover" ? "h-full w-full" : "max-h-full max-w-full";
 
   return (
     <div
@@ -151,16 +188,14 @@ export const ZoomableImage = forwardRef<ZoomableImageHandle, Props>(function Zoo
       onDoubleClick={onDoubleClick}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
-      onTouchEnd={() => {
-        pinch.current = null;
-      }}
+      onTouchEnd={onTouchEnd}
       style={{ cursor: scale > 1 ? "grab" : "zoom-in" }}
     >
       <img
         src={src}
         alt={alt}
         draggable={false}
-        className="max-h-full max-w-full select-none object-contain will-change-transform"
+        className={`select-none ${sizeClass} ${objectClass} will-change-transform transition-opacity duration-200`}
         style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }}
       />
     </div>

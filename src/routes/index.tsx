@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Search, Loader2, LayoutGrid, Rows3 } from "lucide-react";
+import { Search, Loader2, LayoutGrid, Rows3, Monitor } from "lucide-react";
 
 import { fetchSubredditImages, type RedditImage } from "@/lib/reddit";
 import { fetchNsfwTopFeed } from "@/lib/nsfw-subreddits";
@@ -10,7 +10,7 @@ import { FocusViewer } from "@/components/FocusViewer";
 import { NsfwGenreSelect, NSFW_MIX_VALUE } from "@/components/NsfwGenreSelect";
 import { SmartImage } from "@/components/SmartImage";
 
-type BrowseMode = "wall" | "feed";
+type BrowseMode = "wall" | "feed" | "theater";
 
 const TITLE = "Peek — a clean image viewer for Reddit";
 const DESC =
@@ -114,6 +114,7 @@ function Viewer() {
               [
                 { mode: "wall" as const, icon: LayoutGrid, label: "Wall" },
                 { mode: "feed" as const, icon: Rows3, label: "Feed" },
+                { mode: "theater" as const, icon: Monitor, label: "Theater" },
               ] as const
             ).map(({ mode, icon: Icon, label }) => (
               <button
@@ -256,6 +257,34 @@ function Viewer() {
                 <div className="mt-4 max-w-lg px-4 text-center">
                   <p className="line-clamp-2 text-sm text-foreground">{item.title}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
+                    u/{item.author} · r/{item.subreddit} · {item.score.toLocaleString()} pts
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {items.length > 0 && browseMode === "theater" && (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {items.map((item, i) => (
+              <button
+                key={item.id + i}
+                type="button"
+                onClick={() => setActive(i)}
+                className="group relative flex aspect-[4/3] w-full flex-col overflow-hidden rounded-2xl border border-border bg-black/40 text-left shadow-lg transition hover:border-primary/40 hover:shadow-primary/10"
+              >
+                <SmartImage
+                  src={item.url}
+                  alt={item.title}
+                  loading={i < 4 ? "eager" : "lazy"}
+                  width={item.width}
+                  height={item.height}
+                  className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+                />
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-5 pt-16">
+                  <p className="line-clamp-2 text-sm font-medium text-white">{item.title}</p>
+                  <p className="mt-1.5 text-xs text-white/60">
                     u/{item.author} · r/{item.subreddit} · {item.score.toLocaleString()} pts
                   </p>
                 </div>

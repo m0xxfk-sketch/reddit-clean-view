@@ -7,7 +7,8 @@ export type NsfwCategory =
   | "ethnicity"
   | "theme"
   | "couples"
-  | "celeb";
+  | "celeb"
+  | "cosplay";
 
 export type NsfwSubreddit = {
   name: string;
@@ -54,6 +55,51 @@ export const NSFW_TOP_SUBREDDITS: readonly NsfwSubreddit[] = [
   { rank: 35, name: "CelebrityButts", category: "celeb", label: "Celebrity Butts" },
   { rank: 36, name: "WatchItForThePlot", category: "celeb", label: "Plot" },
   { rank: 37, name: "Ohlympics", category: "celeb", label: "Ohlympics" },
+  { rank: 38, name: "NSFW_GIF", category: "general", label: "NSFW GIF" },
+  { rank: 39, name: "adorableporn", category: "general", label: "Adorable" },
+  { rank: 40, name: "Sexy", category: "general", label: "Sexy" },
+  { rank: 41, name: "gonewildcurvy", category: "amateur", label: "GW Curvy" },
+  { rank: 42, name: "VerifiedAmateurs", category: "amateur", label: "Verified" },
+  { rank: 43, name: "workgonewild", category: "amateur", label: "Work GW" },
+  { rank: 44, name: "gonewildcolor", category: "amateur", label: "GW Color" },
+  { rank: 45, name: "Amateur", category: "amateur", label: "Amateur" },
+  { rank: 46, name: "Slut", category: "amateur", label: "Slut" },
+  { rank: 47, name: "bigboobs", category: "body-type", label: "Big Boobs" },
+  { rank: 48, name: "smallboobs", category: "body-type", label: "Small Boobs" },
+  { rank: 49, name: "TinyTits", category: "body-type", label: "Tiny Tits" },
+  { rank: 50, name: "hugeboobs", category: "body-type", label: "Huge Boobs" },
+  { rank: 51, name: "pawg", category: "body-type", label: "PAWG" },
+  { rank: 52, name: "bubblebutt", category: "body-type", label: "Bubble Butt" },
+  { rank: 53, name: "UnderwearGW", category: "body-type", label: "Underwear GW" },
+  { rank: 54, name: "braless", category: "body-type", label: "Braless" },
+  { rank: 55, name: "datgap", category: "body-type", label: "Dat Gap" },
+  { rank: 56, name: "hipcleavage", category: "body-type", label: "Hip Cleavage" },
+  { rank: 57, name: "legs", category: "body-type", label: "Legs" },
+  { rank: 58, name: "palegirls", category: "ethnicity", label: "Pale Girls" },
+  { rank: 59, name: "ginger", category: "ethnicity", label: "Ginger" },
+  { rank: 60, name: "redheads", category: "ethnicity", label: "Redheads" },
+  { rank: 61, name: "whitegirls", category: "ethnicity", label: "White Girls" },
+  { rank: 62, name: "ArabGirls", category: "ethnicity", label: "Arab Girls" },
+  { rank: 63, name: "EasternEuropeanGirls", category: "ethnicity", label: "Eastern European" },
+  { rank: 64, name: "publicflashing", category: "theme", label: "Public Flashing" },
+  { rank: 65, name: "FlashingGirls", category: "theme", label: "Flashing Girls" },
+  { rank: 66, name: "girlsinyogapants", category: "theme", label: "Yoga Pants" },
+  { rank: 67, name: "Upskirt", category: "theme", label: "Upskirt" },
+  { rank: 68, name: "thong", category: "theme", label: "Thong" },
+  { rank: 69, name: "SheLikesItRough", category: "theme", label: "Rough" },
+  { rank: 70, name: "cumsluts", category: "theme", label: "Cumsluts" },
+  { rank: 71, name: "grool", category: "theme", label: "Grool" },
+  { rank: 72, name: "cuckold", category: "couples", label: "Cuckold" },
+  { rank: 73, name: "wifesharing", category: "couples", label: "Wife Sharing" },
+  { rank: 74, name: "WouldYouFuckMyWife", category: "couples", label: "WYFMW" },
+  { rank: 75, name: "CelebrityPussy", category: "celeb", label: "Celebrity Pussy" },
+  { rank: 76, name: "CelebSexScenes", category: "celeb", label: "Sex Scenes" },
+  { rank: 77, name: "nsfwcosplay", category: "cosplay", label: "NSFW Cosplay" },
+  { rank: 78, name: "cosplaygirls", category: "cosplay", label: "Cosplay Girls" },
+  { rank: 79, name: "CosplayBoobs", category: "cosplay", label: "Cosplay Boobs" },
+  { rank: 80, name: "cosplaybabes", category: "cosplay", label: "Cosplay Babes" },
+  { rank: 81, name: "RealAhegao", category: "cosplay", label: "Ahegao" },
+  { rank: 82, name: "lewd", category: "cosplay", label: "Lewd" },
 ] as const;
 
 export const NSFW_GENRE_LABELS: Record<NsfwCategory, string> = {
@@ -64,6 +110,7 @@ export const NSFW_GENRE_LABELS: Record<NsfwCategory, string> = {
   theme: "Themes",
   couples: "Couples",
   celeb: "Celebs",
+  cosplay: "Cosplay",
 };
 
 const GENRE_ORDER: NsfwCategory[] = [
@@ -74,6 +121,7 @@ const GENRE_ORDER: NsfwCategory[] = [
   "theme",
   "couples",
   "celeb",
+  "cosplay",
 ];
 
 export type NsfwGenreGroup = {

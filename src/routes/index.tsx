@@ -1,10 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Search, Loader2 } from "lucide-react";
 
-import { fetchSubredditImages, type RedditImage } from "@/lib/reddit.functions";
+import { fetchSubredditImages, type RedditImage } from "@/lib/reddit";
 import { AgeGate } from "@/components/AgeGate";
 import { Lightbox } from "@/components/Lightbox";
 
@@ -42,12 +41,10 @@ function Viewer() {
   const [sort, setSort] = useState<(typeof SORTS)[number]>("hot");
   const [active, setActive] = useState<number | null>(null);
 
-  const load = useServerFn(fetchSubredditImages);
-
   const query = useInfiniteQuery({
     queryKey: ["sub", subreddit, sort],
     initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) => load({ data: { subreddit, sort, after: pageParam } }),
+    queryFn: ({ pageParam }) => fetchSubredditImages({ subreddit, sort, after: pageParam }),
     getNextPageParam: (last) => last.after,
     retry: false,
   });

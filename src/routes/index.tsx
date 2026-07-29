@@ -4,9 +4,10 @@ import { useMemo, useState } from "react";
 import { Search, Loader2 } from "lucide-react";
 
 import { fetchSubredditImages, type RedditImage } from "@/lib/reddit";
-import { fetchNsfwTopFeed, getNsfwTopSubreddits } from "@/lib/nsfw-subreddits";
+import { fetchNsfwTopFeed } from "@/lib/nsfw-subreddits";
 import { AgeGate } from "@/components/AgeGate";
 import { Lightbox } from "@/components/Lightbox";
+import { NsfwGenreSelect, NSFW_MIX_VALUE } from "@/components/NsfwGenreSelect";
 import { SmartImage } from "@/components/SmartImage";
 
 const TITLE = "Peek — a clean image viewer for Reddit";
@@ -28,7 +29,6 @@ export const Route = createFileRoute("/")({
 
 const SORTS = ["hot", "new", "top", "rising"] as const;
 const PRESETS = ["EarthPorn", "CityPorn", "AnalogCommunity", "Art"];
-const NSFW_TOP = getNsfwTopSubreddits({ limit: 12 });
 
 function Index() {
   return (
@@ -140,33 +140,15 @@ function Viewer() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-muted-foreground">NSFW top</span>
-            <button
-              onClick={() => {
+            <span className="text-muted-foreground">NSFW</span>
+            <NsfwGenreSelect
+              value={mixTop ? NSFW_MIX_VALUE : subreddit}
+              onPickSub={(name) => pickSub(name, true)}
+              onPickMix={() => {
                 setMixTop(true);
                 setSort("top");
               }}
-              className={`rounded-full border px-3 py-1 transition ${
-                mixTop
-                  ? "border-primary/50 bg-primary/10 text-primary"
-                  : "border-border text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Mix top 6
-            </button>
-            {NSFW_TOP.map((sub) => (
-              <button
-                key={sub.name}
-                onClick={() => pickSub(sub.name, true)}
-                className={`rounded-full border px-3 py-1 transition ${
-                  !mixTop && subreddit.toLowerCase() === sub.name.toLowerCase() && sort === "top"
-                    ? "border-primary/50 text-primary"
-                    : "border-border text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                r/{sub.name}
-              </button>
-            ))}
+            />
           </div>
         </div>
       </header>

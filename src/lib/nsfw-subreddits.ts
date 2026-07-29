@@ -30,7 +30,50 @@ export const NSFW_TOP_SUBREDDITS: readonly NsfwSubreddit[] = [
   { rank: 18, name: "gonewild30plus", category: "amateur", label: "GW 30+" },
   { rank: 19, name: "petitegonewild", category: "body-type", label: "Petite GW" },
   { rank: 20, name: "porninfifteenseconds", category: "general", label: "GIFs" },
+  { rank: 21, name: "GoneWildSmiles", category: "amateur", label: "GW Smiles" },
+  { rank: 22, name: "Nudes", category: "general", label: "Nudes" },
+  { rank: 23, name: "Ebony", category: "ethnicity", label: "Ebony" },
+  { rank: 24, name: "IndianBabes", category: "ethnicity", label: "Indian" },
+  { rank: 25, name: "GoneWildCouples", category: "couples", label: "GW Couples" },
+  { rank: 26, name: "Swingersgw", category: "couples", label: "Swingers" },
+  { rank: 27, name: "Hotwife", category: "couples", label: "Hotwife" },
+  { rank: 28, name: "BiggerThanYouThought", category: "theme", label: "BTYT" },
+  { rank: 29, name: "BreedingMaterial", category: "body-type", label: "Breeding Material" },
+  { rank: 30, name: "FitNakedGirls", category: "body-type", label: "Fit Girls" },
 ] as const;
+
+export const NSFW_GENRE_LABELS: Record<NsfwCategory, string> = {
+  general: "General",
+  amateur: "Amateur",
+  "body-type": "Body Type",
+  ethnicity: "Ethnicity",
+  theme: "Themes",
+  couples: "Couples",
+};
+
+const GENRE_ORDER: NsfwCategory[] = [
+  "general",
+  "amateur",
+  "body-type",
+  "ethnicity",
+  "theme",
+  "couples",
+];
+
+export type NsfwGenreGroup = {
+  genre: NsfwCategory;
+  label: string;
+  subs: NsfwSubreddit[];
+};
+
+/** NSFW subs grouped by genre for dropdown menus. */
+export function getNsfwSubredditsByGenre(): NsfwGenreGroup[] {
+  return GENRE_ORDER.map((genre) => ({
+    genre,
+    label: NSFW_GENRE_LABELS[genre],
+    subs: getNsfwTopSubreddits({ category: genre }),
+  })).filter((g) => g.subs.length > 0);
+}
 
 export type NsfwTopListOptions = {
   limit?: number;

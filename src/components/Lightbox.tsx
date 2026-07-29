@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { ChevronLeft, ChevronRight, X, ExternalLink } from "lucide-react";
 import type { RedditImage } from "@/lib/reddit";
+import { SmartImage } from "@/components/SmartImage";
 
 export function Lightbox({
   items,
@@ -65,9 +66,10 @@ export function Lightbox({
       </div>
 
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-4 pb-6">
-        <img
+        <SmartImage
           src={item.url}
           alt={item.title}
+          loading="eager"
           onClick={(e) => e.stopPropagation()}
           className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
         />

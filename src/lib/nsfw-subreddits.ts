@@ -1,18 +1,14 @@
-import { fetchSubredditImages, type FetchResult, type RedditImage } from "@/lib/reddit";
+import type { FetchResult } from "@/lib/reddit";
 
 export type NsfwCategory = "general" | "amateur" | "body-type" | "ethnicity" | "theme" | "couples";
 
 export type NsfwSubreddit = {
-  /** Subreddit name without r/ prefix */
   name: string;
-  /** 1 = most popular in this curated list */
   rank: number;
   category: NsfwCategory;
-  /** Short label for UI chips */
   label: string;
 };
 
-/** Curated top NSFW image subreddits, ordered by typical popularity. */
 export const NSFW_TOP_SUBREDDITS: readonly NsfwSubreddit[] = [
   { rank: 1, name: "gonewild", category: "amateur", label: "GoneWild" },
   { rank: 2, name: "RealGirls", category: "amateur", label: "Real Girls" },
@@ -37,13 +33,10 @@ export const NSFW_TOP_SUBREDDITS: readonly NsfwSubreddit[] = [
 ] as const;
 
 export type NsfwTopListOptions = {
-  /** Max entries to return (default: all) */
   limit?: number;
-  /** Filter to a single category */
   category?: NsfwCategory;
 };
 
-/** Returns the curated NSFW top subreddit list, optionally filtered and truncated. */
 export function getNsfwTopSubreddits(options: NsfwTopListOptions = {}): NsfwSubreddit[] {
   const { limit, category } = options;
   let list = [...NSFW_TOP_SUBREDDITS];
@@ -53,50 +46,30 @@ export function getNsfwTopSubreddits(options: NsfwTopListOptions = {}): NsfwSubr
   return list;
 }
 
-export type NsfwTopFeedOptions = {
-  /** How many subs from the top list to pull from (default: 8) */
-  subLimit?: number;
-  /** Max images to return after merging (default: 80) */
-  imageLimit?: number;
-  /** Only include subs from this category */
-  category?: NsfwCategory;
-};
-
 export type NsfwTopFeedResult = FetchResult & {
-  /** Subs that contributed at least one image */
   sources: string[];
 };
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/**
- * Fetches top posts from the highest-ranked NSFW subs and merges them into one
- * feed sorted by score (highest first).
- */
+/** Fetches a throttled NSFW top mix from the server (one request, sequential Reddit calls). */
 export async function fetchNsfwTopFeed(
-  options: NsfwTopFeedOptions = {},
+  options: { subLimit?: number; imageLimit?: number } = {},
 ): Promise<NsfwTopFeedResult> {
-  const { subLimit = 8, imageLimit = 80, category } = options;
-  const subs = getNsfwTopSubreddits({ limit: subLimit, category });
+  const params = new URLSearchParams({
+    sort: "top",
+    subLimit: String(options.subLimit ?? 6),
+    imageLimit: String(options.imageLimit ?? 80),
+  });
 
-  const batches = await Promise.all(
-    subs.map(async (sub, index) => {
-      // Stagger requests slightly to avoid hammering our proxy
-      if (index > 0) await sleep(index * 120);
-      try {
-        const result = await fetchSubredditImages({ subreddit: sub.name, sort: "top" });
-        return { sub: sub.name, items: result.items };
-      } catch {
-        return { sub: sub.name, items: [] as RedditImage[] };
-      }
-    }),
-  );
+  const res = await fetch(`/api/public/reddit/mix?${params}`, {
+    headers: { Accept: "application/json" },
+  });
 
-  const sources = batches.filter((b) => b.items.length > 0).map((b) => b.sub);
-  const merged = batches
-    .flatMap((b) => b.items)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, imageLimit);
+  const json = (await res.json()) as NsfwTopFeedResult & { error?: string };
+  if (!res.ok) throw new Error(json.error ?? `Mix feed failed (${res.status}).`);
 
-  return { items: merged, after: null, sources };
+  return {
+    items: json.items ?? [],
+    after: json.after ?? null,
+    sources: json.sources ?? [],
+  };
 }

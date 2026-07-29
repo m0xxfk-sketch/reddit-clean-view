@@ -52,7 +52,7 @@ function Viewer() {
       mixTop
         ? pageParam
           ? Promise.resolve({ items: [], after: null })
-          : fetchNsfwTopFeed({ subLimit: 10, imageLimit: 100 })
+          : fetchNsfwTopFeed({ subLimit: 6, imageLimit: 80 })
         : fetchSubredditImages({ subreddit, sort, after: pageParam }),
     getNextPageParam: (last) => (mixTop ? undefined : last.after),
     retry: false,
@@ -152,7 +152,7 @@ function Viewer() {
                   : "border-border text-muted-foreground hover:text-foreground"
               }`}
             >
-              Mix top 10
+              Mix top 6
             </button>
             {NSFW_TOP.map((sub) => (
               <button

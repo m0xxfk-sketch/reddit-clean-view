@@ -95,8 +95,13 @@ export async function fetchSubredditImages(data: FetchArgs): Promise<FetchResult
     }
 
     if (!res.ok) {
+      const isRateLimit = res.status === 429 || res.status === 502;
       lastError = new Error(json?.error ?? `Request failed with ${res.status}.`);
       if (res.status === 400 || res.status === 404) throw lastError;
+      if (isRateLimit && attempt < 2) {
+        await sleep(2000 * (attempt + 1) + Math.random() * 500);
+        continue;
+      }
       continue;
     }
 

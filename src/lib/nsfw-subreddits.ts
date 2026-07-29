@@ -1,6 +1,13 @@
 import type { FetchResult } from "@/lib/reddit";
 
-export type NsfwCategory = "general" | "amateur" | "body-type" | "ethnicity" | "theme" | "couples";
+export type NsfwCategory =
+  | "general"
+  | "amateur"
+  | "body-type"
+  | "ethnicity"
+  | "theme"
+  | "couples"
+  | "celeb";
 
 export type NsfwSubreddit = {
   name: string;
@@ -40,6 +47,13 @@ export const NSFW_TOP_SUBREDDITS: readonly NsfwSubreddit[] = [
   { rank: 28, name: "BiggerThanYouThought", category: "theme", label: "BTYT" },
   { rank: 29, name: "BreedingMaterial", category: "body-type", label: "Breeding Material" },
   { rank: 30, name: "FitNakedGirls", category: "body-type", label: "Fit Girls" },
+  { rank: 31, name: "celebnsfw", category: "celeb", label: "Celeb NSFW" },
+  { rank: 32, name: "Celebs", category: "celeb", label: "Celebs" },
+  { rank: 33, name: "CelebHub", category: "celeb", label: "Celeb Hub" },
+  { rank: 34, name: "celebsnaked", category: "celeb", label: "Celebs Naked" },
+  { rank: 35, name: "CelebrityButts", category: "celeb", label: "Celebrity Butts" },
+  { rank: 36, name: "WatchItForThePlot", category: "celeb", label: "Plot" },
+  { rank: 37, name: "Ohlympics", category: "celeb", label: "Ohlympics" },
 ] as const;
 
 export const NSFW_GENRE_LABELS: Record<NsfwCategory, string> = {
@@ -49,6 +63,7 @@ export const NSFW_GENRE_LABELS: Record<NsfwCategory, string> = {
   ethnicity: "Ethnicity",
   theme: "Themes",
   couples: "Couples",
+  celeb: "Celebs",
 };
 
 const GENRE_ORDER: NsfwCategory[] = [
@@ -58,6 +73,7 @@ const GENRE_ORDER: NsfwCategory[] = [
   "ethnicity",
   "theme",
   "couples",
+  "celeb",
 ];
 
 export type NsfwGenreGroup = {

@@ -1,14 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { Search, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Search, Loader2, LayoutGrid, Rows3 } from "lucide-react";
 
 import { fetchSubredditImages, type RedditImage } from "@/lib/reddit";
 import { fetchNsfwTopFeed } from "@/lib/nsfw-subreddits";
 import { AgeGate } from "@/components/AgeGate";
-import { Lightbox } from "@/components/Lightbox";
+import { FocusViewer } from "@/components/FocusViewer";
 import { NsfwGenreSelect, NSFW_MIX_VALUE } from "@/components/NsfwGenreSelect";
 import { SmartImage } from "@/components/SmartImage";
+
+type BrowseMode = "wall" | "feed";
 
 const TITLE = "Peek — a clean image viewer for Reddit";
 const DESC =
@@ -43,6 +45,7 @@ function Viewer() {
   const [draft, setDraft] = useState("EarthPorn");
   const [sort, setSort] = useState<(typeof SORTS)[number]>("hot");
   const [mixTop, setMixTop] = useState(false);
+  const [browseMode, setBrowseMode] = useState<BrowseMode>("wall");
   const [active, setActive] = useState<number | null>(null);
 
   const query = useInfiniteQuery({
@@ -65,6 +68,11 @@ function Viewer() {
     () => query.data?.pages.flatMap((p) => p.items) ?? [],
     [query.data],
   );
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("feed-scroll", browseMode === "feed");
+    return () => document.documentElement.classList.remove("feed-scroll");
+  }, [browseMode]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,6 +108,31 @@ function Viewer() {
               className="h-11 w-full rounded-full border border-input bg-surface pl-11 pr-4 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/60 focus:ring-2 focus:ring-primary/20"
             />
           </form>
+
+          <div className="flex items-center gap-1 rounded-full border border-border bg-surface p-1">
+            {(
+              [
+                { mode: "wall" as const, icon: LayoutGrid, label: "Wall" },
+                { mode: "feed" as const, icon: Rows3, label: "Feed" },
+              ] as const
+            ).map(({ mode, icon: Icon, label }) => (
+              <button
+                key={mode}
+                type="button"
+                aria-label={`${label} view`}
+                aria-pressed={browseMode === mode}
+                onClick={() => setBrowseMode(mode)}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition ${
+                  browseMode === mode
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Icon className="size-3.5" />
+                {label}
+              </button>
+            ))}
+          </div>
 
           <div className="flex items-center gap-1 rounded-full border border-border bg-surface p-1">
             {SORTS.map((s) => (
@@ -168,11 +201,12 @@ function Viewer() {
           </p>
         )}
 
-        {items.length > 0 && (
+        {items.length > 0 && browseMode === "wall" && (
           <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4 [&>*]:mb-4">
             {items.map((item, i) => (
               <button
                 key={item.id + i}
+                type="button"
                 onClick={() => setActive(i)}
                 className="group relative block w-full break-inside-avoid overflow-hidden rounded-xl border border-border bg-surface text-left"
               >
@@ -195,6 +229,34 @@ function Viewer() {
           </div>
         )}
 
+        {items.length > 0 && browseMode === "feed" && (
+          <div className="flex flex-col">
+            {items.map((item, i) => (
+              <button
+                key={item.id + i}
+                type="button"
+                onClick={() => setActive(i)}
+                className="feed-panel group relative flex min-h-[calc(100vh-8rem)] w-full flex-col items-center justify-center border-b border-border/50 bg-surface/20 px-2 py-8 last:border-b-0"
+              >
+                <SmartImage
+                  src={item.url}
+                  alt={item.title}
+                  loading={i < 3 ? "eager" : "lazy"}
+                  width={item.width}
+                  height={item.height}
+                  className="max-h-[min(78vh,820px)] max-w-full rounded-lg object-contain shadow-lg transition duration-300 group-hover:brightness-105"
+                />
+                <div className="mt-4 max-w-lg px-4 text-center">
+                  <p className="line-clamp-2 text-sm text-foreground">{item.title}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    u/{item.author} · r/{item.subreddit} · {item.score.toLocaleString()} pts
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
         {query.hasNextPage && !mixTop && (
           <div className="flex justify-center py-12">
             <button
@@ -210,7 +272,7 @@ function Viewer() {
       </main>
 
       {active !== null && (
-        <Lightbox
+        <FocusViewer
           items={items}
           index={active}
           onClose={() => setActive(null)}

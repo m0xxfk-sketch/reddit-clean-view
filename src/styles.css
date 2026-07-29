@@ -175,4 +175,13 @@
     background: var(--primary);
     color: var(--primary-foreground);
   }
+
+  html.feed-scroll {
+    scroll-snap-type: y proximity;
+  }
+
+  html.feed-scroll .feed-panel {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
 }

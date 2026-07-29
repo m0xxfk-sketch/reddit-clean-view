@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Search, Loader2 } from "lucide-react";
 
 import { fetchSubredditImages, type RedditImage } from "@/lib/reddit";
+import { fetchNsfwTopFeed, getNsfwTopSubreddits } from "@/lib/nsfw-subreddits";
 import { AgeGate } from "@/components/AgeGate";
 import { Lightbox } from "@/components/Lightbox";
 import { SmartImage } from "@/components/SmartImage";
@@ -26,7 +27,8 @@ export const Route = createFileRoute("/")({
 });
 
 const SORTS = ["hot", "new", "top", "rising"] as const;
-const PRESETS = ["EarthPorn", "CityPorn", "AnalogCommunity", "Art", "gonewild"];
+const PRESETS = ["EarthPorn", "CityPorn", "AnalogCommunity", "Art"];
+const NSFW_TOP = getNsfwTopSubreddits({ limit: 12 });
 
 function Index() {
   return (
@@ -40,13 +42,19 @@ function Viewer() {
   const [subreddit, setSubreddit] = useState("EarthPorn");
   const [draft, setDraft] = useState("EarthPorn");
   const [sort, setSort] = useState<(typeof SORTS)[number]>("hot");
+  const [mixTop, setMixTop] = useState(false);
   const [active, setActive] = useState<number | null>(null);
 
   const query = useInfiniteQuery({
-    queryKey: ["sub", subreddit, sort],
+    queryKey: mixTop ? ["nsfw-top-mix"] : ["sub", subreddit, sort],
     initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) => fetchSubredditImages({ subreddit, sort, after: pageParam }),
-    getNextPageParam: (last) => last.after,
+    queryFn: ({ pageParam }) =>
+      mixTop
+        ? pageParam
+          ? Promise.resolve({ items: [], after: null })
+          : fetchNsfwTopFeed({ subLimit: 10, imageLimit: 100 })
+        : fetchSubredditImages({ subreddit, sort, after: pageParam }),
+    getNextPageParam: (last) => (mixTop ? undefined : last.after),
     retry: false,
     staleTime: 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
@@ -61,7 +69,17 @@ function Viewer() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const clean = draft.trim().replace(/^\/?r\//i, "");
-    if (clean) setSubreddit(clean);
+    if (clean) {
+      setMixTop(false);
+      setSubreddit(clean);
+    }
+  };
+
+  const pickSub = (name: string, topSort = false) => {
+    setMixTop(false);
+    setDraft(name);
+    setSubreddit(name);
+    if (topSort) setSort("top");
   };
 
   return (
@@ -87,9 +105,12 @@ function Viewer() {
             {SORTS.map((s) => (
               <button
                 key={s}
-                onClick={() => setSort(s)}
+                onClick={() => {
+                  setMixTop(false);
+                  setSort(s);
+                }}
                 className={`rounded-full px-3.5 py-1.5 text-xs capitalize transition ${
-                  sort === s
+                  !mixTop && sort === s
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -100,24 +121,53 @@ function Viewer() {
           </div>
         </div>
 
-        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-2 px-5 pb-4 text-xs">
-          <span className="text-muted-foreground">Try</span>
-          {PRESETS.map((p) => (
+        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 px-5 pb-4">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-muted-foreground">Try</span>
+            {PRESETS.map((p) => (
+              <button
+                key={p}
+                onClick={() => pickSub(p)}
+                className={`rounded-full border px-3 py-1 transition ${
+                  !mixTop && subreddit.toLowerCase() === p.toLowerCase()
+                    ? "border-primary/50 text-primary"
+                    : "border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                r/{p}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-muted-foreground">NSFW top</span>
             <button
-              key={p}
               onClick={() => {
-                setDraft(p);
-                setSubreddit(p);
+                setMixTop(true);
+                setSort("top");
               }}
               className={`rounded-full border px-3 py-1 transition ${
-                subreddit.toLowerCase() === p.toLowerCase()
-                  ? "border-primary/50 text-primary"
+                mixTop
+                  ? "border-primary/50 bg-primary/10 text-primary"
                   : "border-border text-muted-foreground hover:text-foreground"
               }`}
             >
-              r/{p}
+              Mix top 10
             </button>
-          ))}
+            {NSFW_TOP.map((sub) => (
+              <button
+                key={sub.name}
+                onClick={() => pickSub(sub.name, true)}
+                className={`rounded-full border px-3 py-1 transition ${
+                  !mixTop && subreddit.toLowerCase() === sub.name.toLowerCase() && sort === "top"
+                    ? "border-primary/50 text-primary"
+                    : "border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                r/{sub.name}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
@@ -132,7 +182,7 @@ function Viewer() {
 
         {!query.isPending && !query.isError && items.length === 0 && (
           <p className="py-24 text-center text-sm text-muted-foreground">
-            No images found in r/{subreddit}.
+            {mixTop ? "No images found in the NSFW top mix." : `No images found in r/${subreddit}.`}
           </p>
         )}
 
@@ -163,7 +213,7 @@ function Viewer() {
           </div>
         )}
 
-        {query.hasNextPage && (
+        {query.hasNextPage && !mixTop && (
           <div className="flex justify-center py-12">
             <button
               onClick={() => query.fetchNextPage()}

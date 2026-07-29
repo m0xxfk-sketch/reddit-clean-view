@@ -47,6 +47,9 @@ function Viewer() {
     queryFn: ({ pageParam }) => fetchSubredditImages({ subreddit, sort, after: pageParam }),
     getNextPageParam: (last) => last.after,
     retry: false,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const items: RedditImage[] = useMemo(

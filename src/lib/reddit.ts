@@ -24,24 +24,93 @@ function decode(s: string) {
   return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"');
 }
 
+export type FetchResult = { items: RedditImage[]; after: string | null };
+
+const CACHE_PREFIX = "peek:page:";
+const CACHE_TTL = 10 * 60 * 1000;
+
+function cacheKey(sub: string, sort: Sort, after?: string | null) {
+  return `${CACHE_PREFIX}${sub.toLowerCase()}:${sort}:${after ?? "start"}`;
+}
+
+function readCache(key: string): FetchResult | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { at: number; data: FetchResult };
+    if (!parsed?.at || Date.now() - parsed.at > CACHE_TTL) {
+      window.sessionStorage.removeItem(key);
+      return null;
+    }
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(key: string, data: FetchResult) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify({ at: Date.now(), data }));
+  } catch {
+    // storage full or unavailable — caching is best-effort
+  }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Retries transient failures (429 / 5xx / network) with exponential backoff + jitter. */
+async function fetchWithBackoff(url: string, attempts = 4) {
+  let lastError: Error = new Error("Couldn't reach Reddit.");
+
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (attempt > 0) {
+      const base = 500 * 2 ** (attempt - 1);
+      await sleep(base + Math.random() * 250);
+    }
+
+    let res: Response;
+    try {
+      res = await fetch(url, { headers: { Accept: "application/json" } });
+    } catch {
+      lastError = new Error("Couldn't reach Reddit. Check your connection or any content blockers.");
+      continue;
+    }
+
+    if (res.status === 429) {
+      lastError = new Error("Reddit is rate limiting. Wait a moment and retry.");
+      continue;
+    }
+    if (res.status >= 500) {
+      lastError = new Error(`Reddit responded with ${res.status}. Try again in a moment.`);
+      continue;
+    }
+    return res;
+  }
+
+  throw lastError;
+}
+
 export async function fetchSubredditImages(data: FetchArgs) {
     const sub = data.subreddit.replace(/[^a-zA-Z0-9_]/g, "");
     if (!sub) throw new Error("Enter a subreddit name.");
+
+    const key = cacheKey(sub, data.sort, data.after);
+    const cached = readCache(key);
+    if (cached) return cached;
+
     const params = new URLSearchParams({ limit: "50", raw_json: "1" });
     if (data.sort === "top") params.set("t", "week");
     if (data.after) params.set("after", data.after);
 
-    const res = await fetch(
+    const res = await fetchWithBackoff(
       `https://www.reddit.com/r/${sub}/${data.sort}.json?${params.toString()}`,
-      { headers: { Accept: "application/json" } },
-    ).catch(() => {
-      throw new Error("Couldn't reach Reddit. Check your connection or any content blockers.");
-    });
+    );
 
     if (res.status === 404) throw new Error(`r/${sub} was not found.`);
     if (res.status === 403)
       throw new Error(`r/${sub} is private, quarantined, or blocking anonymous access.`);
-    if (res.status === 429) throw new Error("Reddit is rate limiting. Wait a moment and retry.");
     if (!res.ok) throw new Error(`Reddit responded with ${res.status}. Try again in a moment.`);
 
     const json = (await res.json()) as any;
@@ -89,5 +158,7 @@ export async function fetchSubredditImages(data: FetchArgs) {
       }
     }
 
-    return { items, after: (json?.data?.after as string | null) ?? null };
+    const result: FetchResult = { items, after: (json?.data?.after as string | null) ?? null };
+    writeCache(key, result);
+    return result;
 }

@@ -60,8 +60,21 @@ function writeCache(key: string, data: FetchResult) {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Reddit's own hosts are often blocked (content blockers, corporate DNS, strict
+ * CORS), so we try several equivalent sources in order and use whichever answers.
+ */
+const SOURCES: Array<(path: string) => string> = [
+  (path) => `https://www.reddit.com${path}`,
+  (path) => `https://api.reddit.com${path}`,
+  (path) => `https://old.reddit.com${path}`,
+  (path) => `https://corsproxy.io/?url=${encodeURIComponent(`https://www.reddit.com${path}`)}`,
+  (path) =>
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.reddit.com${path}`)}`,
+];
+
 /** Retries transient failures (429 / 5xx / network) with exponential backoff + jitter. */
-async function fetchWithBackoff(url: string, attempts = 4) {
+async function fetchWithBackoff(path: string, attempts = 3) {
   let lastError: Error = new Error("Couldn't reach Reddit.");
 
   for (let attempt = 0; attempt < attempts; attempt++) {
@@ -70,23 +83,27 @@ async function fetchWithBackoff(url: string, attempts = 4) {
       await sleep(base + Math.random() * 250);
     }
 
-    let res: Response;
-    try {
-      res = await fetch(url, { headers: { Accept: "application/json" } });
-    } catch {
-      lastError = new Error("Couldn't reach Reddit. Check your connection or any content blockers.");
-      continue;
-    }
+    for (const source of SOURCES) {
+      let res: Response;
+      try {
+        res = await fetch(source(path), { headers: { Accept: "application/json" } });
+      } catch {
+        lastError = new Error(
+          "Couldn't reach Reddit. Check your connection or any content blockers.",
+        );
+        continue;
+      }
 
-    if (res.status === 429) {
-      lastError = new Error("Reddit is rate limiting. Wait a moment and retry.");
-      continue;
+      if (res.status === 429) {
+        lastError = new Error("Reddit is rate limiting. Wait a moment and retry.");
+        continue;
+      }
+      if (res.status === 403 || res.status >= 500) {
+        lastError = new Error(`Reddit responded with ${res.status}. Try again in a moment.`);
+        continue;
+      }
+      return res;
     }
-    if (res.status >= 500) {
-      lastError = new Error(`Reddit responded with ${res.status}. Try again in a moment.`);
-      continue;
-    }
-    return res;
   }
 
   throw lastError;
@@ -104,16 +121,20 @@ export async function fetchSubredditImages(data: FetchArgs) {
     if (data.sort === "top") params.set("t", "week");
     if (data.after) params.set("after", data.after);
 
-    const res = await fetchWithBackoff(
-      `https://www.reddit.com/r/${sub}/${data.sort}.json?${params.toString()}`,
-    );
+    const res = await fetchWithBackoff(`/r/${sub}/${data.sort}.json?${params.toString()}`);
 
     if (res.status === 404) throw new Error(`r/${sub} was not found.`);
     if (res.status === 403)
       throw new Error(`r/${sub} is private, quarantined, or blocking anonymous access.`);
     if (!res.ok) throw new Error(`Reddit responded with ${res.status}. Try again in a moment.`);
 
-    const json = (await res.json()) as any;
+    const text = await res.text();
+    let json: any;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new Error("Reddit returned an unexpected response. Try again in a moment.");
+    }
     const children: any[] = json?.data?.children ?? [];
     const items: RedditImage[] = [];
 

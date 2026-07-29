@@ -188,9 +188,16 @@ function Viewer() {
 
       <main className="mx-auto max-w-[1600px] px-5 py-8">
         {query.isError && (
-          <p className="mx-auto max-w-md rounded-xl border border-destructive/40 bg-destructive/10 px-5 py-4 text-center text-sm text-foreground">
-            {(query.error as Error).message}
-          </p>
+          <div className="mx-auto max-w-md rounded-xl border border-destructive/40 bg-destructive/10 px-5 py-4 text-center text-sm text-foreground">
+            <p>{(query.error as Error).message}</p>
+            <button
+              type="button"
+              onClick={() => query.refetch()}
+              className="mt-3 rounded-full border border-border bg-surface px-4 py-1.5 text-xs transition hover:bg-surface-raised"
+            >
+              Try again
+            </button>
+          </div>
         )}
 
         {query.isPending && <SkeletonWall />}

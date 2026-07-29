@@ -23,22 +23,25 @@ export type FetchArgs = {
 export type FetchResult = { items: RedditImage[]; after: string | null };
 
 const CACHE_PREFIX = "peek:page:";
-const CACHE_TTL = 10 * 60 * 1000;
+const CACHE_TTL = 15 * 60 * 1000;
+const STALE_TTL = 60 * 60 * 1000;
 
 function cacheKey(sub: string, sort: Sort, after?: string | null) {
   return `${CACHE_PREFIX}${sub.toLowerCase()}:${sort}:${after ?? "start"}`;
 }
 
-function readCache(key: string): FetchResult | null {
+function readCache(key: string, maxAge = CACHE_TTL): FetchResult | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.sessionStorage.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { at: number; data: FetchResult };
-    if (!parsed?.at || Date.now() - parsed.at > CACHE_TTL) {
+    const age = Date.now() - (parsed?.at ?? 0);
+    if (!parsed?.at || age > STALE_TTL) {
       window.sessionStorage.removeItem(key);
       return null;
     }
+    if (age > maxAge) return null;
     return parsed.data;
   } catch {
     return null;
@@ -73,8 +76,8 @@ export async function fetchSubredditImages(data: FetchArgs): Promise<FetchResult
 
   let lastError = new Error("Couldn't reach Reddit. Try again in a moment.");
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) await sleep(500 * 2 ** (attempt - 1) + Math.random() * 250);
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) await sleep(800 * 2 ** (attempt - 1) + Math.random() * 400);
 
     let res: Response;
     try {
@@ -112,6 +115,9 @@ export async function fetchSubredditImages(data: FetchArgs): Promise<FetchResult
     writeCache(key, result);
     return result;
   }
+
+  const stale = readCache(key, STALE_TTL);
+  if (stale?.items.length) return stale;
 
   throw lastError;
 }

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicRedditRouteImport } from './routes/api/public/reddit'
+import { Route as ApiPublicImageRouteImport } from './routes/api/public/image'
 import { Route as ApiPublicRedditMixRouteImport } from './routes/api/public/reddit/mix'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +24,11 @@ const ApiPublicRedditRoute = ApiPublicRedditRouteImport.update({
   path: '/api/public/reddit',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicImageRoute = ApiPublicImageRouteImport.update({
+  id: '/api/public/image',
+  path: '/api/public/image',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicRedditMixRoute = ApiPublicRedditMixRouteImport.update({
   id: '/mix',
   path: '/mix',
@@ -31,30 +37,47 @@ const ApiPublicRedditMixRoute = ApiPublicRedditMixRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/public/image': typeof ApiPublicImageRoute
   '/api/public/reddit': typeof ApiPublicRedditRouteWithChildren
   '/api/public/reddit/mix': typeof ApiPublicRedditMixRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/public/image': typeof ApiPublicImageRoute
   '/api/public/reddit': typeof ApiPublicRedditRouteWithChildren
   '/api/public/reddit/mix': typeof ApiPublicRedditMixRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/public/image': typeof ApiPublicImageRoute
   '/api/public/reddit': typeof ApiPublicRedditRouteWithChildren
   '/api/public/reddit/mix': typeof ApiPublicRedditMixRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/public/reddit' | '/api/public/reddit/mix'
+  fullPaths:
+    | '/'
+    | '/api/public/image'
+    | '/api/public/reddit'
+    | '/api/public/reddit/mix'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/public/reddit' | '/api/public/reddit/mix'
-  id: '__root__' | '/' | '/api/public/reddit' | '/api/public/reddit/mix'
+  to:
+    | '/'
+    | '/api/public/image'
+    | '/api/public/reddit'
+    | '/api/public/reddit/mix'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/public/image'
+    | '/api/public/reddit'
+    | '/api/public/reddit/mix'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiPublicImageRoute: typeof ApiPublicImageRoute
   ApiPublicRedditRoute: typeof ApiPublicRedditRouteWithChildren
 }
 
@@ -72,6 +95,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/reddit'
       fullPath: '/api/public/reddit'
       preLoaderRoute: typeof ApiPublicRedditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/image': {
+      id: '/api/public/image'
+      path: '/api/public/image'
+      fullPath: '/api/public/image'
+      preLoaderRoute: typeof ApiPublicImageRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/reddit/mix': {
@@ -98,6 +128,7 @@ const ApiPublicRedditRouteWithChildren = ApiPublicRedditRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiPublicImageRoute: ApiPublicImageRoute,
   ApiPublicRedditRoute: ApiPublicRedditRouteWithChildren,
 }
 export const routeTree = rootRouteImport

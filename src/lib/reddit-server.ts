@@ -31,15 +31,7 @@ async function throttle() {
   lastRedditFetch = Date.now();
 }
 
-function decode(s: string) {
-  return s
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#0?39;/g, "'")
-    .replace(/&#32;/g, " ")
-    .replace(/&amp;/g, "&");
-}
+import { decodeHtmlEntities, normalizeImageUrl } from "@/lib/image-url";
 
 async function getToken(): Promise<string | null> {
   const id = process.env.REDDIT_CLIENT_ID;
@@ -78,7 +70,7 @@ function parseJsonListing(
         author: (p.author as string) ?? "unknown",
         subreddit: (p.subreddit as string) ?? sub,
         permalink: `https://reddit.com${p.permalink as string}`,
-        url: decode(url),
+        url: normalizeImageUrl(decodeHtmlEntities(url)),
         width: width || 800,
         height: height || 1000,
         isGallery: Boolean(suffix),
@@ -125,15 +117,21 @@ function parseRss(xml: string, sub: string): RedditListingResult {
     const entry = raw.split("</entry>")[0];
     const id = /<id>([^<]+)<\/id>/.exec(entry)?.[1] ?? "";
     lastId = id || lastId;
-    const title = decode(/<title>([\s\S]*?)<\/title>/.exec(entry)?.[1] ?? "");
+    const title = decodeHtmlEntities(/<title>([\s\S]*?)<\/title>/.exec(entry)?.[1] ?? "");
     const author = (/<name>\/u\/([^<]+)<\/name>/.exec(entry)?.[1] ?? "unknown").trim();
     const permalink = /<link href="([^"]+)"/.exec(entry)?.[1] ?? "";
     const thumb = /<media:thumbnail url="([^"]+)"/.exec(entry)?.[1];
-    const content = decode(/<content type="html">([\s\S]*?)<\/content>/.exec(entry)?.[1] ?? "");
+    const content = decodeHtmlEntities(
+      /<content type="html">([\s\S]*?)<\/content>/.exec(entry)?.[1] ?? "",
+    );
     const direct =
-      /<a href="(https:\/\/i\.redd\.it\/[^"]+)"/.exec(content)?.[1] ??
-      /<img src="(https:\/\/[^"]+)"/.exec(content)?.[1];
-    const url = direct ?? (thumb ? decode(thumb) : undefined);
+      /href="(https:\/\/i\.redd\.it\/[^"]+)"/.exec(content)?.[1] ??
+      /href="(https:\/\/preview\.redd\.it\/[^"]+)"/.exec(content)?.[1] ??
+      /src="(https:\/\/i\.redd\.it\/[^"]+)"/.exec(content)?.[1] ??
+      /src="(https:\/\/preview\.redd\.it\/[^"]+)"/.exec(content)?.[1] ??
+      /<a href="(https:\/\/i\.redd\.it\/[^"]+)"/.exec(content)?.[1];
+    const rawUrl = direct ?? thumb;
+    const url = rawUrl ? normalizeImageUrl(decodeHtmlEntities(rawUrl)) : undefined;
     if (!url) continue;
 
     const dims = /\[(\d{3,5})\s*[x×]\s*(\d{3,5})\]/i.exec(title);
@@ -142,7 +140,7 @@ function parseRss(xml: string, sub: string): RedditListingResult {
       title,
       author,
       subreddit: sub,
-      permalink: decode(permalink),
+      permalink: decodeHtmlEntities(permalink),
       url,
       width: dims ? Number(dims[1]) : 1200,
       height: dims ? Number(dims[2]) : 1500,

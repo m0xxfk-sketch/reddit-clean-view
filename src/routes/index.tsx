@@ -6,6 +6,7 @@ import { Search, Loader2 } from "lucide-react";
 import { fetchSubredditImages, type RedditImage } from "@/lib/reddit";
 import { AgeGate } from "@/components/AgeGate";
 import { Lightbox } from "@/components/Lightbox";
+import { SmartImage } from "@/components/SmartImage";
 
 const TITLE = "Peek — a clean image viewer for Reddit";
 const DESC =
@@ -143,7 +144,7 @@ function Viewer() {
                 onClick={() => setActive(i)}
                 className="group relative block w-full break-inside-avoid overflow-hidden rounded-xl border border-border bg-surface text-left"
               >
-                <img
+                <SmartImage
                   src={item.url}
                   alt={item.title}
                   loading="lazy"

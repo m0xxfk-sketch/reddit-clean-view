@@ -10,15 +10,22 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CreatorNameRouteImport } from './routes/creator/$name'
 import { Route as ApiPublicRedditRouteImport } from './routes/api/public/reddit'
 import { Route as ApiPublicMediaRouteImport } from './routes/api/public/media'
 import { Route as ApiPublicImageRouteImport } from './routes/api/public/image'
+import { Route as ApiPublicRedditUserRouteImport } from './routes/api/public/reddit/user'
 import { Route as ApiPublicRedditMixRouteImport } from './routes/api/public/reddit/mix'
 import { Route as ApiPublicMediaResolveRouteImport } from './routes/api/public/media/resolve'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CreatorNameRoute = CreatorNameRouteImport.update({
+  id: '/creator/$name',
+  path: '/creator/$name',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicRedditRoute = ApiPublicRedditRouteImport.update({
@@ -36,6 +43,11 @@ const ApiPublicImageRoute = ApiPublicImageRouteImport.update({
   path: '/api/public/image',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicRedditUserRoute = ApiPublicRedditUserRouteImport.update({
+  id: '/user',
+  path: '/user',
+  getParentRoute: () => ApiPublicRedditRoute,
+} as any)
 const ApiPublicRedditMixRoute = ApiPublicRedditMixRouteImport.update({
   id: '/mix',
   path: '/mix',
@@ -49,58 +61,71 @@ const ApiPublicMediaResolveRoute = ApiPublicMediaResolveRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/creator/$name': typeof CreatorNameRoute
   '/api/public/image': typeof ApiPublicImageRoute
   '/api/public/media': typeof ApiPublicMediaRouteWithChildren
   '/api/public/reddit': typeof ApiPublicRedditRouteWithChildren
   '/api/public/media/resolve': typeof ApiPublicMediaResolveRoute
   '/api/public/reddit/mix': typeof ApiPublicRedditMixRoute
+  '/api/public/reddit/user': typeof ApiPublicRedditUserRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/creator/$name': typeof CreatorNameRoute
   '/api/public/image': typeof ApiPublicImageRoute
   '/api/public/media': typeof ApiPublicMediaRouteWithChildren
   '/api/public/reddit': typeof ApiPublicRedditRouteWithChildren
   '/api/public/media/resolve': typeof ApiPublicMediaResolveRoute
   '/api/public/reddit/mix': typeof ApiPublicRedditMixRoute
+  '/api/public/reddit/user': typeof ApiPublicRedditUserRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/creator/$name': typeof CreatorNameRoute
   '/api/public/image': typeof ApiPublicImageRoute
   '/api/public/media': typeof ApiPublicMediaRouteWithChildren
   '/api/public/reddit': typeof ApiPublicRedditRouteWithChildren
   '/api/public/media/resolve': typeof ApiPublicMediaResolveRoute
   '/api/public/reddit/mix': typeof ApiPublicRedditMixRoute
+  '/api/public/reddit/user': typeof ApiPublicRedditUserRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/creator/$name'
     | '/api/public/image'
     | '/api/public/media'
     | '/api/public/reddit'
     | '/api/public/media/resolve'
     | '/api/public/reddit/mix'
+    | '/api/public/reddit/user'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/creator/$name'
     | '/api/public/image'
     | '/api/public/media'
     | '/api/public/reddit'
     | '/api/public/media/resolve'
     | '/api/public/reddit/mix'
+    | '/api/public/reddit/user'
   id:
     | '__root__'
     | '/'
+    | '/creator/$name'
     | '/api/public/image'
     | '/api/public/media'
     | '/api/public/reddit'
     | '/api/public/media/resolve'
     | '/api/public/reddit/mix'
+    | '/api/public/reddit/user'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CreatorNameRoute: typeof CreatorNameRoute
   ApiPublicImageRoute: typeof ApiPublicImageRoute
   ApiPublicMediaRoute: typeof ApiPublicMediaRouteWithChildren
   ApiPublicRedditRoute: typeof ApiPublicRedditRouteWithChildren
@@ -113,6 +138,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/creator/$name': {
+      id: '/creator/$name'
+      path: '/creator/$name'
+      fullPath: '/creator/$name'
+      preLoaderRoute: typeof CreatorNameRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/reddit': {
@@ -135,6 +167,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/public/image'
       preLoaderRoute: typeof ApiPublicImageRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/public/reddit/user': {
+      id: '/api/public/reddit/user'
+      path: '/user'
+      fullPath: '/api/public/reddit/user'
+      preLoaderRoute: typeof ApiPublicRedditUserRouteImport
+      parentRoute: typeof ApiPublicRedditRoute
     }
     '/api/public/reddit/mix': {
       id: '/api/public/reddit/mix'
@@ -167,10 +206,12 @@ const ApiPublicMediaRouteWithChildren = ApiPublicMediaRoute._addFileChildren(
 
 interface ApiPublicRedditRouteChildren {
   ApiPublicRedditMixRoute: typeof ApiPublicRedditMixRoute
+  ApiPublicRedditUserRoute: typeof ApiPublicRedditUserRoute
 }
 
 const ApiPublicRedditRouteChildren: ApiPublicRedditRouteChildren = {
   ApiPublicRedditMixRoute: ApiPublicRedditMixRoute,
+  ApiPublicRedditUserRoute: ApiPublicRedditUserRoute,
 }
 
 const ApiPublicRedditRouteWithChildren = ApiPublicRedditRoute._addFileChildren(
@@ -179,6 +220,7 @@ const ApiPublicRedditRouteWithChildren = ApiPublicRedditRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CreatorNameRoute: CreatorNameRoute,
   ApiPublicImageRoute: ApiPublicImageRoute,
   ApiPublicMediaRoute: ApiPublicMediaRouteWithChildren,
   ApiPublicRedditRoute: ApiPublicRedditRouteWithChildren,

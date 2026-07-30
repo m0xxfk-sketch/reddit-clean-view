@@ -74,6 +74,10 @@ export async function resolveRedgifsUrl(raw: string): Promise<RedgifsUrls | null
   return urls;
 }
 
-export function pickRedgifsPlayback(urls: RedgifsUrls): string | null {
+export function pickRedgifsPlayback(
+  urls: RedgifsUrls,
+  quality: "hd" | "sd" = "hd",
+): string | null {
+  if (quality === "sd") return urls.sd ?? urls.hd ?? null;
   return urls.hd ?? urls.sd ?? null;
 }

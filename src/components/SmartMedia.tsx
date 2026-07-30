@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { ImageOff, RotateCw } from "lucide-react";
 
 import type { MediaKind } from "@/lib/media-types";
@@ -9,6 +9,7 @@ import {
   normalizePosterUrl,
   videoLoadCandidates,
 } from "@/lib/media-url";
+import type { VideoQuality } from "@/lib/premium-store";
 
 const RETRIES_PER_SOURCE = 2;
 const BASE_DELAY = 600;
@@ -23,26 +24,34 @@ type Props = {
   height?: number;
   loading?: "lazy" | "eager";
   autoPlay?: boolean;
+  videoQuality?: VideoQuality;
   onClick?: (e: React.MouseEvent) => void;
 };
+
+export type SmartMediaHandle = { video: HTMLVideoElement | null };
 
 /**
  * Renders images or auto-playing videos. Redgifs watch URLs are resolved
  * server-side before playback.
  */
-export function SmartMedia({
-  src,
-  poster,
-  mediaKind = "image",
-  alt,
-  className,
-  width,
-  height,
-  loading = "lazy",
-  autoPlay = true,
-  onClick,
-}: Props) {
+export const SmartMedia = forwardRef<SmartMediaHandle, Props>(function SmartMedia(
+  {
+    src,
+    poster,
+    mediaKind = "image",
+    alt,
+    className,
+    width,
+    height,
+    loading = "lazy",
+    autoPlay = true,
+    videoQuality = "hd",
+    onClick,
+  },
+  ref,
+) {
   const isVideo = mediaKind === "video";
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [resolvedSrc, setResolvedSrc] = useState<string | null>(
     isVideo && isDirectVideoUrl(src) ? src : null,
   );
@@ -52,6 +61,8 @@ export function SmartMedia({
   const [attempt, setAttempt] = useState(0);
   const [failed, setFailed] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useImperativeHandle(ref, () => ({ video: videoRef.current }));
 
   useEffect(() => {
     setSourceIndex(0);
@@ -78,7 +89,9 @@ export function SmartMedia({
     let cancelled = false;
     setResolvedSrc(null);
 
-    fetch(`/api/public/media/resolve?url=${encodeURIComponent(src)}`)
+    fetch(
+      `/api/public/media/resolve?url=${encodeURIComponent(src)}&quality=${videoQuality}`,
+    )
       .then(async (res) => {
         if (!res.ok) throw new Error("resolve failed");
         return res.json() as Promise<{ url?: string; poster?: string | null }>;
@@ -96,7 +109,7 @@ export function SmartMedia({
     return () => {
       cancelled = true;
     };
-  }, [src, poster, isVideo]);
+  }, [src, poster, isVideo, videoQuality]);
 
   const videoSources = useMemo(
     () => (resolvedSrc ? videoLoadCandidates(resolvedSrc) : []),
@@ -182,6 +195,7 @@ export function SmartMedia({
 
     return (
       <video
+        ref={videoRef}
         key={`${videoSrc}-${sourceIndex}`}
         src={videoSrc}
         poster={resolvedPoster}
@@ -231,7 +245,7 @@ export function SmartMedia({
       className={className}
     />
   );
-}
+});
 
 function VideoFallback({
   poster,

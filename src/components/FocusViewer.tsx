@@ -13,10 +13,14 @@ import {
   X,
 } from "lucide-react";
 
-import type { RedditMedia } from "@/lib/media-types";
-import { imageCandidates } from "@/lib/image-fallbacks";
+import { AmbientBackdrop } from "@/components/AmbientBackdrop";
 import { SmartMedia } from "@/components/SmartMedia";
 import { ZoomableImage, type FitMode, type ZoomableImageHandle } from "@/components/ZoomableImage";
+import { useMediaPrefetch } from "@/hooks/use-media-prefetch";
+import type { RedditMedia } from "@/lib/media-types";
+import { imageCandidates } from "@/lib/image-fallbacks";
+import type { VideoQuality } from "@/lib/premium-store";
+import { playNav } from "@/lib/sounds";
 
 const SLIDESHOW_MS = 4500;
 
@@ -25,10 +29,23 @@ type Props = {
   index: number;
   onClose: () => void;
   onNavigate: (i: number) => void;
+  videoQuality?: VideoQuality;
+  sounds?: boolean;
+  immersive?: boolean;
+  prefetchCount?: number;
 };
 
 /** Cinema-style focus viewer with zoom, pan, filmstrip, slideshow, and keyboard controls. */
-export function FocusViewer({ items, index, onClose, onNavigate }: Props) {
+export function FocusViewer({
+  items,
+  index,
+  onClose,
+  onNavigate,
+  videoQuality = "hd",
+  sounds = true,
+  immersive = false,
+  prefetchCount = 3,
+}: Props) {
   const item = items[index];
   const [zoom, setZoom] = useState(1);
   const [fit, setFit] = useState<FitMode>("contain");
@@ -39,6 +56,8 @@ export function FocusViewer({ items, index, onClose, onNavigate }: Props) {
   const zoomRef = useRef<ZoomableImageHandle>(null);
   const prevIndex = useRef(index);
 
+  useMediaPrefetch(items, index, prefetchCount);
+
   const bumpChrome = useCallback(() => {
     setChrome(true);
     if (hideTimer.current) clearTimeout(hideTimer.current);
@@ -48,13 +67,14 @@ export function FocusViewer({ items, index, onClose, onNavigate }: Props) {
   const goTo = useCallback(
     (next: number) => {
       if (next === index || next < 0 || next >= items.length) return;
+      playNav(sounds);
       setTransitioning(true);
       setTimeout(() => {
         onNavigate(next);
         setTransitioning(false);
       }, 120);
     },
-    [index, items.length, onNavigate],
+    [index, items.length, onNavigate, sounds],
   );
 
   const handleSwipe = useCallback(
@@ -114,7 +134,11 @@ export function FocusViewer({ items, index, onClose, onNavigate }: Props) {
   if (!item) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black" onMouseMove={bumpChrome}>
+    <div
+      className={`focus-viewer fixed inset-0 z-50 flex flex-col bg-black ${immersive ? "focus-immersive" : ""}`}
+      onMouseMove={bumpChrome}
+    >
+      <AmbientBackdrop src={item.url} poster={item.posterUrl} />
       <PreloadAdjacent items={items} index={index} />
 
       <header
@@ -177,7 +201,8 @@ export function FocusViewer({ items, index, onClose, onNavigate }: Props) {
               alt={item.title}
               autoPlay
               loading="eager"
-              className="mx-auto h-full max-h-full w-full max-w-full object-contain"
+              videoQuality={videoQuality}
+              className="relative z-10 mx-auto h-full max-h-full w-full max-w-full object-contain"
             />
           ) : (
             <ZoomableImage

@@ -3,21 +3,29 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Search, Loader2, LayoutGrid, Rows3, Monitor } from "lucide-react";
 
-import { fetchSubredditImages, type RedditMedia } from "@/lib/reddit";
-import { fetchNsfwTopFeed } from "@/lib/nsfw-subreddits";
-import { isRedgifsUrl } from "@/lib/media-url";
-import { AgeGate } from "@/components/AgeGate";
+import { FeedPanel } from "@/components/FeedPanel";
 import { FocusViewer } from "@/components/FocusViewer";
+import { MediaCard } from "@/components/MediaCard";
 import { NsfwGenreSelect, NSFW_MIX_VALUE } from "@/components/NsfwGenreSelect";
-import { SmartMedia } from "@/components/SmartMedia";
+import { PremiumBar } from "@/components/PremiumBar";
+import { AgeGate } from "@/components/AgeGate";
+import { useMediaPrefetch } from "@/hooks/use-media-prefetch";
+import { usePremiumSettings } from "@/hooks/use-premium-settings";
+import { filterMedia } from "@/lib/feed-filters";
+import { fetchMixFeed } from "@/lib/nsfw-subreddits";
+import { fetchSubredditImages, type RedditMedia } from "@/lib/reddit";
+import {
+  cacheOfflineItems,
+  getFavorites,
+  getOfflineItems,
+  getRecentGenres,
+  recordBrowse,
+  type CustomMix,
+} from "@/lib/premium-store";
+import { playTick } from "@/lib/sounds";
 
 type BrowseMode = "wall" | "feed" | "theater";
-
-function itemMediaKind(item: RedditMedia): "image" | "video" {
-  if (item.mediaKind) return item.mediaKind;
-  if (isRedgifsUrl(item.url) || /\.(mp4|webm|gifv)(\?.*)?$/i.test(item.url)) return "video";
-  return "image";
-}
+type FeedMode = "mix" | "sub" | "discover" | "custom" | "favorites";
 
 const TITLE = "Peek — premium NSFW Reddit viewer";
 const DESC =
@@ -47,61 +55,144 @@ function Index() {
 }
 
 function Viewer() {
+  const { settings } = usePremiumSettings();
   const [subreddit, setSubreddit] = useState("gonewild");
   const [draft, setDraft] = useState("gonewild");
   const [sort, setSort] = useState<(typeof SORTS)[number]>("top");
-  const [mixTop, setMixTop] = useState(true);
+  const [feedMode, setFeedMode] = useState<FeedMode>("mix");
+  const [customMix, setCustomMix] = useState<CustomMix | null>(null);
   const [browseMode, setBrowseMode] = useState<BrowseMode>("wall");
   const [active, setActive] = useState<number | null>(null);
+  const [headerHidden, setHeaderHidden] = useState(false);
 
   const query = useInfiniteQuery({
-    queryKey: mixTop ? ["nsfw-top-mix"] : ["sub", subreddit, sort],
+    queryKey:
+      feedMode === "favorites"
+        ? ["favorites"]
+        : feedMode === "discover"
+          ? ["discover", sort]
+          : feedMode === "custom" && customMix
+            ? ["custom-mix", customMix.id, sort]
+            : feedMode === "mix"
+              ? ["nsfw-top-mix", sort]
+              : ["sub", subreddit, sort],
     initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) =>
-      mixTop
-        ? pageParam
-          ? Promise.resolve({ items: [], after: null })
-          : fetchNsfwTopFeed({ subLimit: 6, imageLimit: 80 })
-        : fetchSubredditImages({ subreddit, sort, after: pageParam }),
-    getNextPageParam: (last) => (mixTop ? undefined : last.after),
+    queryFn: ({ pageParam }) => {
+      if (feedMode === "favorites") {
+        return Promise.resolve({ items: getFavorites(), after: null });
+      }
+      if (feedMode === "mix") {
+        return pageParam
+          ? Promise.resolve({ items: [], after: null, sources: [] })
+          : fetchMixFeed({ subLimit: 6, imageLimit: 80 });
+      }
+      if (feedMode === "discover") {
+        return pageParam
+          ? Promise.resolve({ items: [], after: null, sources: [] })
+          : fetchMixFeed({
+              subLimit: 8,
+              imageLimit: 80,
+              discover: true,
+              excludeGenres: getRecentGenres(),
+            });
+      }
+      if (feedMode === "custom" && customMix) {
+        return pageParam
+          ? Promise.resolve({ items: [], after: null, sources: [] })
+          : fetchMixFeed({ subs: customMix.subs, imageLimit: 80 });
+      }
+      return fetchSubredditImages({ subreddit, sort, after: pageParam });
+    },
+    getNextPageParam: (last) =>
+      feedMode === "sub" ? last.after : undefined,
     retry: false,
     staleTime: 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 
-  const items: RedditMedia[] = useMemo(
-    () => query.data?.pages.flatMap((p) => p.items) ?? [],
-    [query.data],
+  const rawItems: RedditMedia[] = useMemo(() => {
+    const fetched = query.data?.pages.flatMap((p) => p.items) ?? [];
+    if (fetched.length) return fetched;
+    return getOfflineItems();
+  }, [query.data]);
+
+  const items = useMemo(
+    () =>
+      filterMedia(rawItems, {
+        mediaFilter: settings.mediaFilter,
+        minScore: settings.minScore,
+        timeFilter: settings.timeFilter,
+      }),
+    [rawItems, settings.mediaFilter, settings.minScore, settings.timeFilter],
   );
+
+  useMediaPrefetch(items, active, settings.prefetchCount);
+
+  useEffect(() => {
+    if (rawItems.length) cacheOfflineItems(rawItems);
+  }, [rawItems]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("feed-scroll", browseMode === "feed");
-    return () => document.documentElement.classList.remove("feed-scroll");
-  }, [browseMode]);
+    document.documentElement.classList.toggle("peek-immersive", settings.immersive);
+    return () => {
+      document.documentElement.classList.remove("feed-scroll", "peek-immersive");
+    };
+  }, [browseMode, settings.immersive]);
+
+  useEffect(() => {
+    if (!settings.immersive) {
+      setHeaderHidden(false);
+      return;
+    }
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      setHeaderHidden(y > 80 && y > lastY);
+      lastY = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [settings.immersive]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const clean = draft.trim().replace(/^\/?r\//i, "");
     if (clean) {
-      setMixTop(false);
+      setFeedMode("sub");
       setSubreddit(clean);
+      recordBrowse(clean);
+      playTick(settings.sounds);
     }
   };
 
   const pickSub = (name: string, topSort = false) => {
-    setMixTop(false);
+    setFeedMode("sub");
     setDraft(name);
     setSubreddit(name);
+    recordBrowse(name);
     if (topSort) setSort("top");
+    playTick(settings.sounds);
+  };
+
+  const scrollToFeed = (i: number) => {
+    document.querySelector(`[data-feed-index="${i}"]`)?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
     <div className="grain min-h-screen">
-      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-xl">
+      <header
+        className={`sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-xl transition-transform duration-300 ${
+          settings.immersive && headerHidden ? "-translate-y-full" : "translate-y-0"
+        }`}
+      >
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4">
           <h1 className="font-display text-2xl leading-none text-glow">
             Peek<span className="text-primary">.</span>
+            <span className="ml-2 align-middle text-[10px] font-sans uppercase tracking-[0.2em] text-primary/70">
+              Premium
+            </span>
           </h1>
 
           <form onSubmit={submit} className="relative min-w-[220px] flex-1">
@@ -115,7 +206,7 @@ function Viewer() {
             />
           </form>
 
-          <div className="flex items-center gap-1 rounded-full border border-border bg-surface p-1">
+          <div className="browse-modes flex items-center gap-1 rounded-full border border-border bg-surface p-1">
             {(
               [
                 { mode: "wall" as const, icon: LayoutGrid, label: "Wall" },
@@ -128,7 +219,10 @@ function Viewer() {
                 type="button"
                 aria-label={`${label} view`}
                 aria-pressed={browseMode === mode}
-                onClick={() => setBrowseMode(mode)}
+                onClick={() => {
+                  setBrowseMode(mode);
+                  playTick(settings.sounds);
+                }}
                 className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition ${
                   browseMode === mode
                     ? "bg-primary text-primary-foreground"
@@ -146,11 +240,11 @@ function Viewer() {
               <button
                 key={s}
                 onClick={() => {
-                  setMixTop(false);
-                  setSort(s);
+                  if (feedMode === "sub") setSort(s);
+                  playTick(settings.sounds);
                 }}
                 className={`rounded-full px-3.5 py-1.5 text-xs capitalize transition ${
-                  !mixTop && sort === s
+                  feedMode === "sub" && sort === s
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -161,20 +255,45 @@ function Viewer() {
           </div>
         </div>
 
-        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-2 px-5 pb-4 text-xs">
-          <span className="text-muted-foreground">Browse</span>
-          <NsfwGenreSelect
-            value={mixTop ? NSFW_MIX_VALUE : subreddit}
-            onPickSub={(name) => pickSub(name, true)}
-            onPickMix={() => {
-              setMixTop(true);
-              setSort("top");
+        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 px-5 pb-4">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-muted-foreground">Browse</span>
+            <NsfwGenreSelect
+              value={
+                feedMode === "mix"
+                  ? NSFW_MIX_VALUE
+                  : feedMode === "discover"
+                    ? "__discover__"
+                    : feedMode === "favorites"
+                      ? "__favorites__"
+                      : subreddit
+              }
+              onPickSub={(name) => pickSub(name, true)}
+              onPickMix={() => {
+                setFeedMode("mix");
+                setSort("top");
+                playTick(settings.sounds);
+              }}
+            />
+          </div>
+          <PremiumBar
+            showingFavorites={feedMode === "favorites"}
+            onDiscover={() => {
+              setFeedMode("discover");
+              query.refetch();
+              playTick(settings.sounds);
             }}
+            onCustomMix={(mix) => {
+              setCustomMix(mix);
+              setFeedMode("custom");
+              query.refetch();
+            }}
+            onShowFavorites={() => setFeedMode("favorites")}
           />
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1600px] px-5 py-8">
+      <main className={`mx-auto max-w-[1600px] px-5 py-8 layout-${browseMode}`}>
         {query.isError && (
           <div className="mx-auto max-w-md rounded-xl border border-destructive/40 bg-destructive/10 px-5 py-4 text-center text-sm text-foreground">
             <p>{(query.error as Error).message}</p>
@@ -192,36 +311,24 @@ function Viewer() {
 
         {!query.isPending && !query.isError && items.length === 0 && (
           <p className="py-24 text-center text-sm text-muted-foreground">
-            {mixTop ? "No images found in the NSFW top mix." : `No images found in r/${subreddit}.`}
+            No media matches your filters. Try adjusting score or media type.
           </p>
         )}
 
         {items.length > 0 && browseMode === "wall" && (
           <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4 [&>*]:mb-4">
             {items.map((item, i) => (
-              <button
+              <MediaCard
                 key={item.id + i}
-                type="button"
-                onClick={() => setActive(i)}
-                className="group relative block w-full break-inside-avoid overflow-hidden rounded-xl border border-border bg-surface text-left"
-              >
-                <SmartMedia
-                  src={item.url}
-                  poster={item.posterUrl}
-                  mediaKind={itemMediaKind(item)}
-                  alt={item.title}
-                  loading="lazy"
-                  width={item.width}
-                  height={item.height}
-                  className="w-full transition duration-500 group-hover:scale-[1.03]"
-                />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-2 bg-gradient-to-t from-background to-transparent p-4 pt-10 opacity-0 transition duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-                  <p className="line-clamp-2 text-sm text-foreground">{item.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    u/{item.author} · {item.score.toLocaleString()} pts
-                  </p>
-                </div>
-              </button>
+                item={item}
+                index={i}
+                onOpen={setActive}
+                videoQuality={settings.videoQuality}
+                sounds={settings.sounds}
+                showPip
+                className="break-inside-avoid overflow-hidden rounded-xl border border-border bg-surface"
+                mediaClassName="w-full transition duration-500 group-hover:scale-[1.03]"
+              />
             ))}
           </div>
         )}
@@ -229,29 +336,24 @@ function Viewer() {
         {items.length > 0 && browseMode === "feed" && (
           <div className="flex flex-col">
             {items.map((item, i) => (
-              <button
+              <FeedPanel
                 key={item.id + i}
-                type="button"
-                onClick={() => setActive(i)}
-                className="feed-panel group relative flex min-h-[calc(100vh-8rem)] w-full flex-col items-center justify-center border-b border-border/50 bg-surface/20 px-2 py-8 last:border-b-0"
+                onSwipeUp={() => scrollToFeed(i + 1)}
               >
-                <SmartMedia
-                  src={item.url}
-                  poster={item.posterUrl}
-                  mediaKind={itemMediaKind(item)}
-                  alt={item.title}
-                  loading={i < 3 ? "eager" : "lazy"}
-                  width={item.width}
-                  height={item.height}
-                  className="max-h-[min(78vh,820px)] max-w-full rounded-lg object-contain shadow-lg transition duration-300 group-hover:brightness-105"
-                />
-                <div className="mt-4 max-w-lg px-4 text-center">
-                  <p className="line-clamp-2 text-sm text-foreground">{item.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    u/{item.author} · r/{item.subreddit} · {item.score.toLocaleString()} pts
-                  </p>
+                <div data-feed-index={i} className="flex w-full flex-col items-center">
+                  <MediaCard
+                    item={item}
+                    index={i}
+                    onOpen={setActive}
+                    videoQuality={settings.videoQuality}
+                    sounds={settings.sounds}
+                    overlay="always"
+                    loading={i < 3 ? "eager" : "lazy"}
+                    className="w-full max-w-4xl"
+                    mediaClassName="max-h-[min(78vh,820px)] max-w-full rounded-lg object-contain shadow-lg"
+                  />
                 </div>
-              </button>
+              </FeedPanel>
             ))}
           </div>
         )}
@@ -259,34 +361,24 @@ function Viewer() {
         {items.length > 0 && browseMode === "theater" && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {items.map((item, i) => (
-              <button
+              <MediaCard
                 key={item.id + i}
-                type="button"
-                onClick={() => setActive(i)}
-                className="group relative flex aspect-[4/3] w-full flex-col overflow-hidden rounded-2xl border border-border bg-black/40 text-left shadow-lg transition hover:border-primary/40 hover:shadow-primary/10"
-              >
-                <SmartMedia
-                  src={item.url}
-                  poster={item.posterUrl}
-                  mediaKind={itemMediaKind(item)}
-                  alt={item.title}
-                  loading={i < 4 ? "eager" : "lazy"}
-                  width={item.width}
-                  height={item.height}
-                  className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
-                />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-5 pt-16">
-                  <p className="line-clamp-2 text-sm font-medium text-white">{item.title}</p>
-                  <p className="mt-1.5 text-xs text-white/60">
-                    u/{item.author} · r/{item.subreddit} · {item.score.toLocaleString()} pts
-                  </p>
-                </div>
-              </button>
+                item={item}
+                index={i}
+                onOpen={setActive}
+                videoQuality={settings.videoQuality}
+                sounds={settings.sounds}
+                showPip
+                overlay="always"
+                loading={i < 4 ? "eager" : "lazy"}
+                className="aspect-[4/3] overflow-hidden rounded-2xl border border-border bg-black/40 shadow-lg transition hover:border-primary/40"
+                mediaClassName="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+              />
             ))}
           </div>
         )}
 
-        {query.hasNextPage && !mixTop && (
+        {query.hasNextPage && feedMode === "sub" && (
           <div className="flex justify-center py-12">
             <button
               onClick={() => query.fetchNextPage()}
@@ -306,6 +398,10 @@ function Viewer() {
           index={active}
           onClose={() => setActive(null)}
           onNavigate={setActive}
+          videoQuality={settings.videoQuality}
+          sounds={settings.sounds}
+          immersive={settings.immersive}
+          prefetchCount={settings.prefetchCount}
         />
       )}
     </div>

@@ -387,7 +387,6 @@ export type FetchListingResponse = {
   cache: "hit" | "miss" | "stale";
 };
 
-/** Fetch a subreddit listing with cache, throttle, retry, and stale fallback. */
 export async function fetchRedditListing(opts: FetchListingOptions): Promise<FetchListingResponse> {
   const { sub, sort, after = "" } = opts;
   const key = cacheKey(sub, sort, after);
@@ -480,4 +479,75 @@ export async function fetchRedditMix(
   const result = { items, after: null as string | null, sources };
   cache.set(mixKey, { at: Date.now(), body: JSON.stringify(result) });
   return result;
+}
+
+export type FetchUserOptions = {
+  user: string;
+  sort?: string;
+  after?: string;
+};
+
+function userCacheKey(user: string, sort: string, after: string) {
+  return `v2:user:${user.toLowerCase()}:${sort}:${after || "start"}`;
+}
+
+/** Fetch a Reddit user's submitted posts. */
+export async function fetchRedditUser(opts: FetchUserOptions): Promise<FetchListingResponse> {
+  const user = opts.user.replace(/[^a-zA-Z0-9_-]/g, "");
+  const sort = opts.sort ?? "new";
+  const after = opts.after ?? "";
+  if (!user) throw new ListingError("Enter a username.", 400);
+
+  const key = userCacheKey(user, sort, after);
+  const fresh = readCache(key, CACHE_TTL);
+  if (fresh) {
+    let fixed = normalizeListing(JSON.parse(fresh.body) as RedditListingResult);
+    fixed = { ...fixed, items: await resolveListingVideos(fixed.items) };
+    return { body: JSON.stringify(fixed), cache: "hit" };
+  }
+
+  let payload: RedditListingResult | null = null;
+
+  const accessToken = await getToken().catch(() => null);
+  if (accessToken) {
+    const qs = new URLSearchParams({ limit: "50", raw_json: "1", sort });
+    if (after) {
+      qs.set("after", after);
+      qs.set("count", "50");
+    }
+    await throttle();
+    const res = await fetch(`https://oauth.reddit.com/user/${user}/submitted?${qs}`, {
+      headers: { Authorization: `Bearer ${accessToken}`, "User-Agent": UA },
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (res.ok) payload = parseJsonListing(await res.json(), user);
+  }
+
+  if (!payload) {
+    const qs = new URLSearchParams({ limit: "25" });
+    if (after) qs.set("after", after);
+    const res = await fetchRssUser(user, qs);
+    if (res.ok) {
+      const parsed = parseRss(await res.text(), user);
+      if (parsed.items.length) payload = parsed;
+    } else if (res.status === 404) {
+      throw new ListingError(`u/${user} was not found.`, 404);
+    }
+  }
+
+  if (payload) {
+    payload.items = await resolveListingVideos(payload.items);
+    return { body: writeCache(key, payload), cache: "miss" };
+  }
+
+  throw new ListingError("Couldn't load this user's posts.", 502);
+}
+
+async function fetchRssUser(user: string, qs: URLSearchParams): Promise<Response> {
+  const url = `https://www.reddit.com/user/${user}/submitted.rss?${qs}`;
+  await throttle();
+  return fetch(url, {
+    headers: { "User-Agent": UA, Accept: "application/atom+xml" },
+    signal: AbortSignal.timeout(12_000),
+  });
 }

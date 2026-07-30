@@ -201,19 +201,51 @@ export function getNsfwTopSubreddits(options: NsfwTopListOptions = {}): NsfwSubr
   return list;
 }
 
+/** Pick one random sub per genre for discover mode, avoiding recent genres. */
+export function pickDiscoverSubs(limit: number, excludeGenres: string[] = []): string[] {
+  const groups = getNsfwSubredditsByGenre().filter((g) => !excludeGenres.includes(g.genre));
+  const shuffled = [...groups].sort(() => Math.random() - 0.5);
+  const picked: string[] = [];
+
+  for (const group of shuffled) {
+    if (picked.length >= limit) break;
+    const subs = [...group.subs].sort(() => Math.random() - 0.5);
+    if (subs[0]) picked.push(subs[0].name);
+  }
+
+  if (picked.length < limit) {
+    const pool = [...NSFW_TOP_SUBREDDITS]
+      .sort(() => Math.random() - 0.5)
+      .map((s) => s.name)
+      .filter((n) => !picked.includes(n));
+    picked.push(...pool.slice(0, limit - picked.length));
+  }
+
+  return picked.slice(0, limit);
+}
+
 export type NsfwTopFeedResult = FetchResult & {
   sources: string[];
 };
 
-/** Fetches a throttled NSFW top mix from the server (one request, sequential Reddit calls). */
-export async function fetchNsfwTopFeed(
-  options: { subLimit?: number; imageLimit?: number } = {},
-): Promise<NsfwTopFeedResult> {
+export type MixFeedOptions = {
+  subLimit?: number;
+  imageLimit?: number;
+  subs?: string[];
+  discover?: boolean;
+  excludeGenres?: string[];
+};
+
+/** Mix feed — default top subs, custom subs, or discover shuffle. */
+export async function fetchMixFeed(options: MixFeedOptions = {}): Promise<NsfwTopFeedResult> {
   const params = new URLSearchParams({
     sort: "top",
     subLimit: String(options.subLimit ?? 6),
     imageLimit: String(options.imageLimit ?? 80),
   });
+  if (options.subs?.length) params.set("subs", options.subs.join(","));
+  if (options.discover) params.set("discover", "1");
+  if (options.excludeGenres?.length) params.set("exclude", options.excludeGenres.join(","));
 
   const res = await fetch(`/api/public/reddit/mix?${params}`, {
     headers: { Accept: "application/json" },
@@ -227,4 +259,11 @@ export async function fetchNsfwTopFeed(
     after: json.after ?? null,
     sources: json.sources ?? [],
   };
+}
+
+/** @deprecated Use fetchMixFeed */
+export async function fetchNsfwTopFeed(
+  options: { subLimit?: number; imageLimit?: number } = {},
+): Promise<NsfwTopFeedResult> {
+  return fetchMixFeed(options);
 }

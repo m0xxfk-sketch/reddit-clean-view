@@ -111,3 +111,25 @@ export async function fetchSubredditImages(data: FetchArgs): Promise<FetchResult
 
   throw lastError;
 }
+
+export async function fetchUserPosts(data: FetchArgs & { user: string }): Promise<FetchResult> {
+  const user = data.user.replace(/[^a-zA-Z0-9_-]/g, "");
+  if (!user) throw new Error("Enter a username.");
+
+  const key = `${CACHE_PREFIX}user:${user}:${data.sort}:${data.after ?? "start"}`;
+  const cached = readCache(key);
+  if (cached) return cached;
+
+  const params = new URLSearchParams({ user, sort: data.sort });
+  if (data.after) params.set("after", data.after);
+
+  const res = await fetch(`/api/public/reddit/user?${params}`, {
+    headers: { Accept: "application/json" },
+  });
+  const json = (await res.json()) as FetchResult & { error?: string };
+  if (!res.ok) throw new Error(json.error ?? `Request failed (${res.status}).`);
+
+  const result: FetchResult = { items: json.items ?? [], after: json.after ?? null };
+  writeCache(key, result);
+  return result;
+}

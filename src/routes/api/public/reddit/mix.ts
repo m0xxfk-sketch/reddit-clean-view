@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { fetchRedditMix, ListingError } from "@/lib/reddit-server";
-import { getNsfwTopSubreddits } from "@/lib/nsfw-subreddits";
+import { getNsfwTopSubreddits, pickDiscoverSubs } from "@/lib/nsfw-subreddits";
 
 export const Route = createFileRoute("/api/public/reddit/mix")({
   server: {
@@ -13,8 +13,25 @@ export const Route = createFileRoute("/api/public/reddit/mix")({
           : "top";
         const subLimit = Math.min(Math.max(Number(params.get("subLimit") ?? 6), 1), 10);
         const imageLimit = Math.min(Math.max(Number(params.get("imageLimit") ?? 80), 10), 120);
+        const discover = params.get("discover") === "1";
+        const exclude = (params.get("exclude") ?? "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
 
-        const subs = getNsfwTopSubreddits({ limit: subLimit }).map((s) => s.name);
+        const custom = (params.get("subs") ?? "")
+          .split(",")
+          .map((s) => s.replace(/[^a-zA-Z0-9_]/g, ""))
+          .filter(Boolean)
+          .slice(0, 10);
+
+        let subs = custom;
+        if (!subs.length) {
+          subs = discover
+            ? pickDiscoverSubs(subLimit, exclude)
+            : getNsfwTopSubreddits({ limit: subLimit }).map((s) => s.name);
+        }
+
         if (!subs.length) {
           return Response.json({ error: "No subreddits configured." }, { status: 400 });
         }
@@ -22,7 +39,7 @@ export const Route = createFileRoute("/api/public/reddit/mix")({
         try {
           const result = await fetchRedditMix(subs, sort, imageLimit);
           return Response.json(result, {
-            headers: { "content-type": "application/json", "x-cache": "miss" },
+            headers: { "content-type": "application/json", "x-cache": discover ? "discover" : "miss" },
           });
         } catch (err) {
           if (err instanceof ListingError) {

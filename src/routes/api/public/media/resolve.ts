@@ -7,7 +7,10 @@ export const Route = createFileRoute("/api/public/media/resolve")({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const raw = new URL(request.url).searchParams.get("url") ?? "";
+        const params = new URL(request.url).searchParams;
+        const raw = params.get("url") ?? "";
+        const quality = params.get("quality") === "sd" ? "sd" : "hd";
+
         if (!raw) {
           return Response.json({ error: "Missing url parameter." }, { status: 400 });
         }
@@ -22,7 +25,7 @@ export const Route = createFileRoute("/api/public/media/resolve")({
 
         try {
           const urls = await resolveRedgifsUrl(raw);
-          const playback = urls ? pickRedgifsPlayback(urls) : null;
+          const playback = urls ? pickRedgifsPlayback(urls, quality) : null;
           if (!playback) {
             return Response.json({ error: "Could not resolve Redgifs URL." }, { status: 502 });
           }

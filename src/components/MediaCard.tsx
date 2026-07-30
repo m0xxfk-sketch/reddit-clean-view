@@ -10,6 +10,7 @@ import { playTick } from "@/lib/sounds";
 import type { VideoQuality } from "@/lib/premium-store";
 
 export function itemMediaKind(item: RedditMedia): "image" | "video" {
+  if (/\.gif(\?.*)?$/i.test(item.url)) return "image";
   if (item.mediaKind) return item.mediaKind;
   if (isRedgifsUrl(item.url) || /\.(mp4|webm|gifv)(\?.*)?$/i.test(item.url)) return "video";
   return "image";
@@ -36,7 +37,7 @@ export function MediaCard({
   mediaClassName,
   overlay = "hover",
   loading = "lazy",
-  videoQuality = "hd",
+  videoQuality = "sd",
   sounds = true,
   showPip = false,
 }: Props) {

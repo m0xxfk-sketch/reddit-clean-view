@@ -35,7 +35,7 @@ const OFFLINE_KEY = "peek:premium:offline";
 const RECENT_GENRES_KEY = "peek:premium:genres";
 
 export const DEFAULT_SETTINGS: PremiumSettings = {
-  videoQuality: "hd",
+  videoQuality: "sd",
   mediaFilter: "all",
   minScore: 0,
   timeFilter: "all",

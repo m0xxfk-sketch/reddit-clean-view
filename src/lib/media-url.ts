@@ -71,7 +71,8 @@ export function videoLoadCandidates(raw: string): string[] {
     out.push(u);
   };
 
-  add(raw);
+  // Proxy first — avoids CORS/rate limits on Redgifs and Reddit video hosts.
   if (isAllowedMediaUrl(raw)) add(mediaProxyUrl(raw));
+  add(raw);
   return out;
 }

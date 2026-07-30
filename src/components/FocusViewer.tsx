@@ -41,7 +41,7 @@ export function FocusViewer({
   index,
   onClose,
   onNavigate,
-  videoQuality = "hd",
+  videoQuality = "sd",
   sounds = true,
   immersive = false,
   prefetchCount = 3,
@@ -56,7 +56,7 @@ export function FocusViewer({
   const zoomRef = useRef<ZoomableImageHandle>(null);
   const prevIndex = useRef(index);
 
-  useMediaPrefetch(items, index, prefetchCount);
+  useMediaPrefetch(items, index, prefetchCount, videoQuality);
 
   const bumpChrome = useCallback(() => {
     setChrome(true);

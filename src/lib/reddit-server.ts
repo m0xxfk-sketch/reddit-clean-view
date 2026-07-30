@@ -123,7 +123,7 @@ function parseJsonListing(
         const m = mediaMeta[mid];
         if (!m || m.status !== "valid" || !m.s) return;
         const asset = m.s.u ?? m.s.gif ?? "";
-        if (/\.gif$/i.test(asset)) pushVideo(asset, undefined, m.s.x, m.s.y, `-${i}`);
+        if (/\.gif$/i.test(asset)) pushImage(asset, m.s.x, m.s.y, `-${i}`);
         else pushImage(asset, m.s.x, m.s.y, `-${i}`);
       });
       continue;
@@ -189,7 +189,9 @@ function parseJsonListing(
 
     if (typeof p.url === "string" && /\.(jpe?g|png|gif|webp)(\?.*)?$/i.test(p.url)) {
       if (/\.gif$/i.test(p.url)) {
-        pushVideo(p.url, undefined, (p.thumbnail_width as number) ?? 800, (p.thumbnail_height as number) ?? 1000);
+        const mp4 = previewImage?.variants?.mp4?.source;
+        if (mp4?.url) pushVideo(mp4.url, poster, mp4.width, mp4.height);
+        else pushImage(p.url, (p.thumbnail_width as number) ?? 800, (p.thumbnail_height as number) ?? 1000);
       } else {
         pushImage(p.url, (p.thumbnail_width as number) ?? 800, (p.thumbnail_height as number) ?? 1000);
       }
@@ -266,7 +268,7 @@ function parseRss(xml: string, sub: string): RedditListingResult {
       subreddit: sub,
       permalink: decodeHtmlEntities(permalink),
       url,
-      mediaKind: /\.gif(\?.*)?$/i.test(url) ? "video" : "image",
+      mediaKind: "image",
       width,
       height,
       isGallery: false,

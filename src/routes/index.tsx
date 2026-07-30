@@ -127,7 +127,7 @@ function Viewer() {
     [rawItems, settings.mediaFilter, settings.minScore, settings.timeFilter],
   );
 
-  useMediaPrefetch(items, active, settings.prefetchCount);
+  useMediaPrefetch(items, active, settings.prefetchCount, settings.videoQuality);
 
   useEffect(() => {
     if (rawItems.length) cacheOfflineItems(rawItems);
@@ -390,7 +390,7 @@ function Viewer() {
                 sounds={settings.sounds}
                 showPip
                 overlay="always"
-                loading={i < 4 ? "eager" : "lazy"}
+                loading={i < 2 ? "eager" : "lazy"}
                 className="aspect-[4/3] overflow-hidden rounded-2xl border border-border bg-black/40 shadow-lg transition hover:border-primary/40"
                 mediaClassName="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
               />

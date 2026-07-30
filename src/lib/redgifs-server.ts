@@ -32,18 +32,24 @@ export function isRedgifsUrl(raw: string): boolean {
 async function getAuthToken(): Promise<string> {
   if (authToken && authToken.expires > Date.now() + 60_000) return authToken.value;
 
-  const res = await fetch("https://api.redgifs.com/v2/auth/temporary", {
-    headers: { "User-Agent": UA, Origin: ORIGIN, Referer: `${ORIGIN}/` },
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!res.ok) throw new Error(`Redgifs auth failed (${res.status}).`);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await sleep(500 * 2 ** attempt);
+    const res = await fetch("https://api.redgifs.com/v2/auth/temporary", {
+      headers: { "User-Agent": UA, Origin: ORIGIN, Referer: `${ORIGIN}/` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) continue;
 
-  const json = (await res.json()) as { token?: string };
-  if (!json.token) throw new Error("Redgifs auth returned no token.");
+    const json = (await res.json()) as { token?: string };
+    if (!json.token) continue;
 
-  authToken = { value: json.token, expires: Date.now() + 50 * 60 * 1000 };
-  return json.token;
+    authToken = { value: json.token, expires: Date.now() + 50 * 60 * 1000 };
+    return json.token;
+  }
+  throw new Error("Redgifs auth failed.");
 }
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Resolve a redgifs watch URL to direct mp4 URLs (cached). */
 export async function resolveRedgifsUrl(raw: string): Promise<RedgifsUrls | null> {
@@ -53,30 +59,46 @@ export async function resolveRedgifsUrl(raw: string): Promise<RedgifsUrls | null
   const cached = resolveCache.get(slug);
   if (cached && Date.now() - cached.at < RESOLVE_CACHE_TTL) return cached.urls;
 
-  const token = await getAuthToken();
-  const res = await fetch(`https://api.redgifs.com/v2/gifs/${slug}`, {
-    headers: {
-      "User-Agent": UA,
-      Origin: ORIGIN,
-      Referer: `${ORIGIN}/`,
-      Authorization: `Bearer ${token}`,
-    },
-    signal: AbortSignal.timeout(12_000),
-  });
+  let token = await getAuthToken();
 
-  if (!res.ok) return null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await sleep(400 * 2 ** attempt);
+    const res = await fetch(`https://api.redgifs.com/v2/gifs/${slug}`, {
+      headers: {
+        "User-Agent": UA,
+        Origin: ORIGIN,
+        Referer: `${ORIGIN}/`,
+        Authorization: `Bearer ${token}`,
+      },
+      signal: AbortSignal.timeout(12_000),
+    });
 
-  const json = (await res.json()) as { gif?: { urls?: RedgifsUrls } };
-  const urls = json.gif?.urls;
-  if (!urls?.hd && !urls?.sd) return null;
+    if (res.status === 401) {
+      authToken = null;
+      const fresh = await getAuthToken();
+      if (fresh !== token) {
+        token = fresh;
+        continue;
+      }
+    }
 
-  resolveCache.set(slug, { at: Date.now(), urls });
-  return urls;
+    if (res.status === 429 || res.status >= 500) continue;
+    if (!res.ok) return null;
+
+    const json = (await res.json()) as { gif?: { urls?: RedgifsUrls } };
+    const urls = json.gif?.urls;
+    if (!urls?.hd && !urls?.sd) return null;
+
+    resolveCache.set(slug, { at: Date.now(), urls });
+    return urls;
+  }
+
+  return null;
 }
 
 export function pickRedgifsPlayback(
   urls: RedgifsUrls,
-  quality: "hd" | "sd" = "hd",
+  quality: "hd" | "sd" = "sd",
 ): string | null {
   if (quality === "sd") return urls.sd ?? urls.hd ?? null;
   return urls.hd ?? urls.sd ?? null;

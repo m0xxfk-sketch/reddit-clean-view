@@ -10,6 +10,7 @@ import {
   videoLoadCandidates,
 } from "@/lib/media-url";
 import type { VideoQuality } from "@/lib/premium-store";
+import { isAnimatedGifUrl, resolveVideoUrl } from "@/lib/video-resolve";
 
 const RETRIES_PER_SOURCE = 2;
 const BASE_DELAY = 600;
@@ -30,10 +31,6 @@ type Props = {
 
 export type SmartMediaHandle = { video: HTMLVideoElement | null };
 
-/**
- * Renders images or auto-playing videos. Redgifs watch URLs are resolved
- * server-side before playback.
- */
 export const SmartMedia = forwardRef<SmartMediaHandle, Props>(function SmartMedia(
   {
     src,
@@ -45,13 +42,17 @@ export const SmartMedia = forwardRef<SmartMediaHandle, Props>(function SmartMedi
     height,
     loading = "lazy",
     autoPlay = true,
-    videoQuality = "hd",
+    videoQuality = "sd",
     onClick,
   },
   ref,
 ) {
-  const isVideo = mediaKind === "video";
+  const rootRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const isGif = isAnimatedGifUrl(src);
+  const isVideo = mediaKind === "video" && !isGif;
+
+  const [visible, setVisible] = useState(loading === "eager");
   const [resolvedSrc, setResolvedSrc] = useState<string | null>(
     isVideo && isDirectVideoUrl(src) ? src : null,
   );
@@ -63,6 +64,27 @@ export const SmartMedia = forwardRef<SmartMediaHandle, Props>(function SmartMedi
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useImperativeHandle(ref, () => ({ video: videoRef.current }));
+
+  useEffect(() => {
+    if (loading === "eager") {
+      setVisible(true);
+      return;
+    }
+    const node = rootRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [loading]);
 
   useEffect(() => {
     setSourceIndex(0);
@@ -86,31 +108,36 @@ export const SmartMedia = forwardRef<SmartMediaHandle, Props>(function SmartMedi
       return;
     }
 
+    if (!visible) return;
+
     let cancelled = false;
     setResolvedSrc(null);
 
-    fetch(
-      `/api/public/media/resolve?url=${encodeURIComponent(src)}&quality=${videoQuality}`,
-      { credentials: "include" },
-    )
-      .then(async (res) => {
-        if (!res.ok) throw new Error("resolve failed");
-        return res.json() as Promise<{ url?: string; poster?: string | null }>;
-      })
-      .then((json) => {
-        if (cancelled) return;
-        if (!json.url) throw new Error("no url");
-        setResolvedSrc(json.url);
-        if (json.poster) setResolvedPoster(normalizePosterUrl(json.poster));
-      })
-      .catch(() => {
-        if (!cancelled) setResolveError(true);
-      });
+    const attemptResolve = (retriesLeft: number) => {
+      resolveVideoUrl(src, videoQuality, { priority: true })
+        .then((result) => {
+          if (cancelled) return;
+          if (!result?.url) {
+            if (retriesLeft > 0) {
+              setTimeout(() => attemptResolve(retriesLeft - 1), 800);
+              return;
+            }
+            throw new Error("no url");
+          }
+          setResolvedSrc(result.url);
+          if (result.poster) setResolvedPoster(normalizePosterUrl(result.poster));
+        })
+        .catch(() => {
+          if (!cancelled) setResolveError(true);
+        });
+    };
+
+    attemptResolve(1);
 
     return () => {
       cancelled = true;
     };
-  }, [src, poster, isVideo, videoQuality]);
+  }, [src, poster, isVideo, videoQuality, visible]);
 
   const videoSources = useMemo(
     () => (resolvedSrc ? videoLoadCandidates(resolvedSrc) : []),
@@ -157,11 +184,26 @@ export const SmartMedia = forwardRef<SmartMediaHandle, Props>(function SmartMedi
     setAttempt(1);
     setFailed(false);
     setResolveError(false);
+    if (isVideo && needsVideoResolve(src)) {
+      setResolvedSrc(null);
+      resolveVideoUrl(src, videoQuality, { priority: true }).then((result) => {
+        if (result?.url) {
+          setResolvedSrc(result.url);
+          if (result.poster) setResolvedPoster(normalizePosterUrl(result.poster));
+        } else setResolveError(true);
+      });
+    }
   };
+
+  const wrap = (content: React.ReactNode) => (
+    <div ref={rootRef} className={isVideo || isGif ? "contents" : undefined}>
+      {content}
+    </div>
+  );
 
   if (isVideo) {
     if (resolveError || failed) {
-      return (
+      return wrap(
         <VideoFallback
           poster={resolvedPoster ?? poster}
           alt={alt}
@@ -169,32 +211,32 @@ export const SmartMedia = forwardRef<SmartMediaHandle, Props>(function SmartMedi
           width={width}
           height={height}
           onRetry={retryManually}
-        />
+        />,
       );
     }
 
-    if (!resolvedSrc) {
+    if (!visible || !resolvedSrc) {
       const posterCandidates = resolvedPoster ? imageCandidates(resolvedPoster) : [];
       const posterSrc = posterCandidates[0];
 
-      return (
+      return wrap(
         <div
           className={`relative flex items-center justify-center overflow-hidden bg-black/40 ${className ?? ""}`}
           style={width && height ? { aspectRatio: `${width} / ${height}` } : undefined}
         >
           {posterSrc && (
-            <img src={posterSrc} alt={alt} className="h-full w-full object-cover opacity-60" />
+            <img src={posterSrc} alt={alt} className="h-full w-full object-cover opacity-60" loading="lazy" />
           )}
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="size-8 animate-spin rounded-full border-2 border-white/30 border-t-white/90" />
           </div>
-        </div>
+        </div>,
       );
     }
 
     const videoSrc = videoSources[sourceIndex] ?? resolvedSrc;
 
-    return (
+    return wrap(
       <video
         ref={videoRef}
         key={`${videoSrc}-${sourceIndex}`}
@@ -210,12 +252,21 @@ export const SmartMedia = forwardRef<SmartMediaHandle, Props>(function SmartMedi
         className={className}
         width={width}
         height={height}
-      />
+      />,
+    );
+  }
+
+  if (!visible) {
+    return wrap(
+      <div
+        style={width && height ? { aspectRatio: `${width} / ${height}` } : undefined}
+        className={`animate-pulse bg-surface ${className ?? ""}`}
+      />,
     );
   }
 
   if (failed) {
-    return (
+    return wrap(
       <div
         style={width && height ? { aspectRatio: `${width} / ${height}` } : undefined}
         className={`flex w-full flex-col items-center justify-center gap-3 bg-surface p-6 text-center ${className ?? ""}`}
@@ -229,11 +280,11 @@ export const SmartMedia = forwardRef<SmartMediaHandle, Props>(function SmartMedi
           <RotateCw className="size-3.5" />
           Retry
         </button>
-      </div>
+      </div>,
     );
   }
 
-  return (
+  return wrap(
     <img
       key={`${sourceIndex}-${attempt}`}
       src={withRetryParam(imageSources[sourceIndex] ?? src, attempt)}
@@ -244,7 +295,7 @@ export const SmartMedia = forwardRef<SmartMediaHandle, Props>(function SmartMedi
       onError={handleError}
       onClick={onClick}
       className={className}
-    />
+    />,
   );
 });
 

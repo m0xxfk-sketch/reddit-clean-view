@@ -5,6 +5,8 @@ type Item = {
   subreddit: string;
   permalink: string;
   url: string;
+  posterUrl?: string;
+  mediaKind: "image" | "video";
   width: number;
   height: number;
   isGallery: boolean;
@@ -32,6 +34,7 @@ async function throttle() {
 }
 
 import { decodeHtmlEntities, normalizeImageUrl } from "@/lib/image-url";
+import { isDirectVideoUrl, isRedgifsUrl, normalizePosterUrl } from "@/lib/media-url";
 
 async function getToken(): Promise<string | null> {
   const id = process.env.REDDIT_CLIENT_ID;
@@ -63,7 +66,7 @@ function parseJsonListing(
     const p = child?.data as Record<string, unknown> | undefined;
     if (!p || p.stickied) continue;
 
-    const push = (url: string, width: number, height: number, suffix = "") =>
+    const pushImage = (url: string, width: number, height: number, suffix = "") =>
       items.push({
         id: `${p.id}${suffix}`,
         title: (p.title as string) ?? "",
@@ -71,6 +74,30 @@ function parseJsonListing(
         subreddit: (p.subreddit as string) ?? sub,
         permalink: `https://reddit.com${p.permalink as string}`,
         url: normalizeImageUrl(decodeHtmlEntities(url)),
+        mediaKind: "image",
+        width: width || 800,
+        height: height || 1000,
+        isGallery: Boolean(suffix),
+        score: (p.score as number) ?? 0,
+        created: (p.created_utc as number) ?? 0,
+      });
+
+    const pushVideo = (
+      url: string,
+      poster: string | undefined,
+      width: number,
+      height: number,
+      suffix = "",
+    ) =>
+      items.push({
+        id: `${p.id}${suffix}`,
+        title: (p.title as string) ?? "",
+        author: (p.author as string) ?? "unknown",
+        subreddit: (p.subreddit as string) ?? sub,
+        permalink: `https://reddit.com${p.permalink as string}`,
+        url: isDirectVideoUrl(url) ? normalizeImageUrl(decodeHtmlEntities(url)) : url,
+        posterUrl: normalizePosterUrl(poster),
+        mediaKind: "video",
         width: width || 800,
         height: height || 1000,
         isGallery: Boolean(suffix),
@@ -88,22 +115,77 @@ function parseJsonListing(
       order.forEach((mid, i) => {
         const m = mediaMeta[mid];
         if (!m || m.status !== "valid" || !m.s) return;
-        push(m.s.u ?? m.s.gif ?? "", m.s.x, m.s.y, `-${i}`);
+        const asset = m.s.u ?? m.s.gif ?? "";
+        if (/\.gif$/i.test(asset)) pushVideo(asset, undefined, m.s.x, m.s.y, `-${i}`);
+        else pushImage(asset, m.s.x, m.s.y, `-${i}`);
       });
       continue;
     }
 
-    const preview = (
-      p.preview as
-        | { images?: { source?: { url: string; width: number; height: number } }[] }
-        | undefined
-    )?.images?.[0];
-    if (preview?.source?.url) {
-      push(preview.source.url, preview.source.width, preview.source.height);
+    type PreviewImage = {
+      source?: { url: string; width: number; height: number };
+      variants?: { mp4?: { source?: { url: string; width: number; height: number } } };
+    };
+    type Preview = {
+      images?: PreviewImage[];
+      reddit_video_preview?: { fallback_url?: string; width?: number; height?: number };
+    };
+
+    const preview = p.preview as Preview | undefined;
+    const previewImage = preview?.images?.[0];
+    const poster = previewImage?.source?.url;
+    const dest =
+      (typeof p.url_overridden_by_dest === "string" && p.url_overridden_by_dest) ||
+      (typeof p.url === "string" ? p.url : "");
+
+    const redditVideo =
+      (
+        p.media as { reddit_video?: { fallback_url?: string; width?: number; height?: number } }
+      )?.reddit_video?.fallback_url ??
+      (
+        p.secure_media as {
+          reddit_video?: { fallback_url?: string; width?: number; height?: number };
+        }
+      )?.reddit_video?.fallback_url ??
+      preview?.reddit_video_preview?.fallback_url;
+
+    if (redditVideo) {
+      pushVideo(
+        redditVideo,
+        poster,
+        previewImage?.source?.width ?? 800,
+        previewImage?.source?.height ?? 1000,
+      );
       continue;
     }
+
+    const previewMp4 = previewImage?.variants?.mp4?.source;
+    if (previewMp4?.url) {
+      pushVideo(previewMp4.url, poster, previewMp4.width, previewMp4.height);
+      continue;
+    }
+
+    if (isRedgifsUrl(dest) || (dest && isDirectVideoUrl(dest))) {
+      pushVideo(
+        dest,
+        poster,
+        previewImage?.source?.width ?? 800,
+        previewImage?.source?.height ?? 1000,
+      );
+      continue;
+    }
+
+    if (previewImage?.source?.url) {
+      pushImage(previewImage.source.url, previewImage.source.width, previewImage.source.height);
+      continue;
+    }
+
     if (typeof p.url === "string" && /\.(jpe?g|png|gif|webp)(\?.*)?$/i.test(p.url)) {
-      push(p.url, (p.thumbnail_width as number) ?? 800, (p.thumbnail_height as number) ?? 1000);
+      if (/\.gif$/i.test(p.url)) {
+        pushVideo(p.url, undefined, (p.thumbnail_width as number) ?? 800, (p.thumbnail_height as number) ?? 1000);
+      } else {
+        pushImage(p.url, (p.thumbnail_width as number) ?? 800, (p.thumbnail_height as number) ?? 1000);
+      }
     }
   }
   return { items, after: json?.data?.after ?? null };
@@ -124,17 +206,49 @@ function parseRss(xml: string, sub: string): RedditListingResult {
     const content = decodeHtmlEntities(
       /<content type="html">([\s\S]*?)<\/content>/.exec(entry)?.[1] ?? "",
     );
+
+    const redgifs =
+      /href="(https:\/\/[^"]*redgifs\.com\/watch\/[^"]+)"/i.exec(content)?.[1] ??
+      /href="(https:\/\/[^"]*redgifs\.com\/ifr\/[^"]+)"/i.exec(content)?.[1];
+    const vreddit = /href="(https:\/\/v\.redd\.it\/[^"]+)"/i.exec(content)?.[1];
+    const imgSrc =
+      /src="(https:\/\/external-preview\.redd\.it\/[^"]+)"/.exec(content)?.[1] ??
+      /src="(https:\/\/preview\.redd\.it\/[^"]+)"/.exec(content)?.[1] ??
+      /src="(https:\/\/i\.redd\.it\/[^"]+)"/.exec(content)?.[1];
     const direct =
       /href="(https:\/\/i\.redd\.it\/[^"]+)"/.exec(content)?.[1] ??
       /href="(https:\/\/preview\.redd\.it\/[^"]+)"/.exec(content)?.[1] ??
       /src="(https:\/\/i\.redd\.it\/[^"]+)"/.exec(content)?.[1] ??
       /src="(https:\/\/preview\.redd\.it\/[^"]+)"/.exec(content)?.[1] ??
       /<a href="(https:\/\/i\.redd\.it\/[^"]+)"/.exec(content)?.[1];
+
+    const dims = /\[(\d{3,5})\s*[x×]\s*(\d{3,5})\]/i.exec(title);
+    const width = dims ? Number(dims[1]) : 1200;
+    const height = dims ? Number(dims[2]) : 1500;
+
+    if (redgifs || vreddit) {
+      items.push({
+        id: id || redgifs || vreddit || title,
+        title,
+        author,
+        subreddit: sub,
+        permalink: decodeHtmlEntities(permalink),
+        url: redgifs ?? vreddit!,
+        posterUrl: normalizePosterUrl(imgSrc ?? thumb),
+        mediaKind: "video",
+        width,
+        height,
+        isGallery: false,
+        score: 0,
+        created: Date.parse(/<published>([^<]+)<\/published>/.exec(entry)?.[1] ?? "") / 1000 || 0,
+      });
+      continue;
+    }
+
     const rawUrl = direct ?? thumb;
     const url = rawUrl ? normalizeImageUrl(decodeHtmlEntities(rawUrl)) : undefined;
     if (!url) continue;
 
-    const dims = /\[(\d{3,5})\s*[x×]\s*(\d{3,5})\]/i.exec(title);
     items.push({
       id: id || url,
       title,
@@ -142,8 +256,9 @@ function parseRss(xml: string, sub: string): RedditListingResult {
       subreddit: sub,
       permalink: decodeHtmlEntities(permalink),
       url,
-      width: dims ? Number(dims[1]) : 1200,
-      height: dims ? Number(dims[2]) : 1500,
+      mediaKind: /\.gif(\?.*)?$/i.test(url) ? "video" : "image",
+      width,
+      height,
       isGallery: false,
       score: 0,
       created: Date.parse(/<published>([^<]+)<\/published>/.exec(entry)?.[1] ?? "") / 1000 || 0,
@@ -162,7 +277,11 @@ function normalizeListing(payload: RedditListingResult): RedditListingResult {
     ...payload,
     items: payload.items.map((item) => ({
       ...item,
-      url: normalizeImageUrl(decodeHtmlEntities(item.url)),
+      url: item.mediaKind === "video" && isRedgifsUrl(item.url)
+        ? item.url
+        : normalizeImageUrl(decodeHtmlEntities(item.url)),
+      posterUrl: normalizePosterUrl(item.posterUrl),
+      mediaKind: item.mediaKind ?? "image",
     })),
   };
 }

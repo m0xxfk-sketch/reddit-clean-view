@@ -1,16 +1,6 @@
-export type RedditImage = {
-  id: string;
-  title: string;
-  author: string;
-  subreddit: string;
-  permalink: string;
-  url: string;
-  width: number;
-  height: number;
-  isGallery: boolean;
-  score: number;
-  created: number;
-};
+import type { RedditMedia } from "@/lib/media-types";
+
+export type { RedditMedia, RedditImage, MediaKind } from "@/lib/media-types";
 
 export type Sort = "hot" | "new" | "top" | "rising";
 
@@ -20,7 +10,7 @@ export type FetchArgs = {
   after?: string | null;
 };
 
-export type FetchResult = { items: RedditImage[]; after: string | null };
+export type FetchResult = { items: RedditMedia[]; after: string | null };
 
 const CACHE_PREFIX = "peek:page:";
 const CACHE_TTL = 15 * 60 * 1000;
@@ -89,7 +79,7 @@ export async function fetchSubredditImages(data: FetchArgs): Promise<FetchResult
       continue;
     }
 
-    let json: { items?: RedditImage[]; after?: string | null; error?: string };
+    let json: { items?: RedditMedia[]; after?: string | null; error?: string };
     try {
       json = await res.json();
     } catch {

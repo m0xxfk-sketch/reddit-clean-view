@@ -13,15 +13,15 @@ import {
   X,
 } from "lucide-react";
 
-import type { RedditImage } from "@/lib/reddit";
+import type { RedditMedia } from "@/lib/media-types";
 import { imageCandidates } from "@/lib/image-fallbacks";
-import { SmartImage } from "@/components/SmartImage";
+import { SmartMedia } from "@/components/SmartMedia";
 import { ZoomableImage, type FitMode, type ZoomableImageHandle } from "@/components/ZoomableImage";
 
 const SLIDESHOW_MS = 4500;
 
 type Props = {
-  items: RedditImage[];
+  items: RedditMedia[];
   index: number;
   onClose: () => void;
   onNavigate: (i: number) => void;
@@ -169,15 +169,27 @@ export function FocusViewer({ items, index, onClose, onNavigate }: Props) {
         <div
           className={`h-full transition-opacity duration-150 ${transitioning ? "opacity-0" : "opacity-100"}`}
         >
-          <ZoomableImage
-            ref={zoomRef}
-            src={item.url}
-            alt={item.title}
-            fit={fit}
-            onZoomChange={setZoom}
-            onSwipe={handleSwipe}
-            className="h-full"
-          />
+          {item.mediaKind === "video" ? (
+            <SmartMedia
+              src={item.url}
+              poster={item.posterUrl}
+              mediaKind="video"
+              alt={item.title}
+              autoPlay
+              loading="eager"
+              className="mx-auto h-full max-h-full w-full max-w-full object-contain"
+            />
+          ) : (
+            <ZoomableImage
+              ref={zoomRef}
+              src={item.url}
+              alt={item.title}
+              fit={fit}
+              onZoomChange={setZoom}
+              onSwipe={handleSwipe}
+              className="h-full"
+            />
+          )}
         </div>
         {index > 0 && <Nav side="left" onClick={() => goTo(index - 1)} visible={chrome} />}
         {index < items.length - 1 && (
@@ -198,7 +210,7 @@ export function FocusViewer({ items, index, onClose, onNavigate }: Props) {
   );
 }
 
-function PreloadAdjacent({ items, index }: { items: RedditImage[]; index: number }) {
+function PreloadAdjacent({ items, index }: { items: RedditMedia[]; index: number }) {
   const urls = [items[index - 1]?.url, items[index + 1]?.url].filter(Boolean) as string[];
   return (
     <div aria-hidden className="pointer-events-none absolute size-0 overflow-hidden opacity-0">
@@ -262,7 +274,7 @@ function Filmstrip({
   onPick,
   visible,
 }: {
-  items: RedditImage[];
+  items: RedditMedia[];
   index: number;
   onPick: (i: number) => void;
   visible: boolean;
@@ -295,10 +307,13 @@ function Filmstrip({
                 : "border-transparent opacity-50 hover:opacity-80"
             }`}
           >
-            <SmartImage
+            <SmartMedia
               src={thumb.url}
+              poster={thumb.posterUrl}
+              mediaKind={thumb.mediaKind}
               alt=""
               loading="lazy"
+              autoPlay={false}
               className="h-full w-full object-cover"
             />
           </button>

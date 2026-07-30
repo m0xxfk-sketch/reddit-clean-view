@@ -3,14 +3,21 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Search, Loader2, LayoutGrid, Rows3, Monitor } from "lucide-react";
 
-import { fetchSubredditImages, type RedditImage } from "@/lib/reddit";
+import { fetchSubredditImages, type RedditMedia } from "@/lib/reddit";
 import { fetchNsfwTopFeed } from "@/lib/nsfw-subreddits";
+import { isRedgifsUrl } from "@/lib/media-url";
 import { AgeGate } from "@/components/AgeGate";
 import { FocusViewer } from "@/components/FocusViewer";
 import { NsfwGenreSelect, NSFW_MIX_VALUE } from "@/components/NsfwGenreSelect";
-import { SmartImage } from "@/components/SmartImage";
+import { SmartMedia } from "@/components/SmartMedia";
 
 type BrowseMode = "wall" | "feed" | "theater";
+
+function itemMediaKind(item: RedditMedia): "image" | "video" {
+  if (item.mediaKind) return item.mediaKind;
+  if (isRedgifsUrl(item.url) || /\.(mp4|webm|gifv)(\?.*)?$/i.test(item.url)) return "video";
+  return "image";
+}
 
 const TITLE = "Peek — a clean image viewer for Reddit";
 const DESC =
@@ -64,7 +71,7 @@ function Viewer() {
     refetchOnWindowFocus: false,
   });
 
-  const items: RedditImage[] = useMemo(
+  const items: RedditMedia[] = useMemo(
     () => query.data?.pages.flatMap((p) => p.items) ?? [],
     [query.data],
   );
@@ -218,8 +225,10 @@ function Viewer() {
                 onClick={() => setActive(i)}
                 className="group relative block w-full break-inside-avoid overflow-hidden rounded-xl border border-border bg-surface text-left"
               >
-                <SmartImage
+                <SmartMedia
                   src={item.url}
+                  poster={item.posterUrl}
+                  mediaKind={itemMediaKind(item)}
                   alt={item.title}
                   loading="lazy"
                   width={item.width}
@@ -246,8 +255,10 @@ function Viewer() {
                 onClick={() => setActive(i)}
                 className="feed-panel group relative flex min-h-[calc(100vh-8rem)] w-full flex-col items-center justify-center border-b border-border/50 bg-surface/20 px-2 py-8 last:border-b-0"
               >
-                <SmartImage
+                <SmartMedia
                   src={item.url}
+                  poster={item.posterUrl}
+                  mediaKind={itemMediaKind(item)}
                   alt={item.title}
                   loading={i < 3 ? "eager" : "lazy"}
                   width={item.width}
@@ -274,8 +285,10 @@ function Viewer() {
                 onClick={() => setActive(i)}
                 className="group relative flex aspect-[4/3] w-full flex-col overflow-hidden rounded-2xl border border-border bg-black/40 text-left shadow-lg transition hover:border-primary/40 hover:shadow-primary/10"
               >
-                <SmartImage
+                <SmartMedia
                   src={item.url}
+                  poster={item.posterUrl}
+                  mediaKind={itemMediaKind(item)}
                   alt={item.title}
                   loading={i < 4 ? "eager" : "lazy"}
                   width={item.width}

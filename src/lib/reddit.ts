@@ -8,6 +8,8 @@ export type FetchArgs = {
   subreddit: string;
   sort: Sort;
   after?: string | null;
+  /** Skip session cache — use when user explicitly switches subreddit. */
+  fresh?: boolean;
 };
 
 export type FetchResult = { items: RedditMedia[]; after: string | null };
@@ -58,8 +60,10 @@ export async function fetchSubredditImages(data: FetchArgs): Promise<FetchResult
   if (!sub) throw new Error("Enter a subreddit name.");
 
   const key = cacheKey(sub, data.sort, data.after);
-  const cached = readCache(key);
-  if (cached) return cached;
+  if (!data.fresh) {
+    const cached = readCache(key);
+    if (cached) return cached;
+  }
 
   const params = new URLSearchParams({ subreddit: sub, sort: data.sort });
   if (data.after) params.set("after", data.after);

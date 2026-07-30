@@ -65,6 +65,14 @@ function Viewer() {
   const [active, setActive] = useState<number | null>(null);
   const [headerHidden, setHeaderHidden] = useState(false);
 
+  const feedId = useMemo(() => {
+    if (feedMode === "favorites") return "favorites";
+    if (feedMode === "discover") return `discover-${sort}`;
+    if (feedMode === "custom" && customMix) return `custom-${customMix.id}-${sort}`;
+    if (feedMode === "mix") return `mix-${sort}`;
+    return `sub-${subreddit}-${sort}`;
+  }, [feedMode, subreddit, sort, customMix]);
+
   const query = useInfiniteQuery({
     queryKey:
       feedMode === "favorites"
@@ -101,12 +109,12 @@ function Viewer() {
           ? Promise.resolve({ items: [], after: null, sources: [] })
           : fetchMixFeed({ subs: customMix.subs, imageLimit: 60 });
       }
-      return fetchSubredditImages({ subreddit, sort, after: pageParam });
+      return fetchSubredditImages({ subreddit, sort, after: pageParam, fresh: !pageParam });
     },
     getNextPageParam: (last) =>
       feedMode === "sub" ? last.after : undefined,
     retry: 1,
-    staleTime: 10 * 60 * 1000,
+    staleTime: feedMode === "sub" ? 0 : 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
@@ -114,8 +122,11 @@ function Viewer() {
   const rawItems: RedditMedia[] = useMemo(() => {
     const fetched = query.data?.pages.flatMap((p) => p.items) ?? [];
     if (fetched.length) return fetched;
-    return getOfflineItems();
-  }, [query.data]);
+    // Don't show stale offline items while a new feed is loading.
+    if (query.isPending || query.isFetching) return [];
+    if (query.isError) return getOfflineItems();
+    return [];
+  }, [query.data, query.isPending, query.isFetching, query.isError]);
 
   const items = useMemo(
     () =>
@@ -128,6 +139,11 @@ function Viewer() {
   );
 
   useMediaPrefetch(items, active, settings.prefetchCount, settings.videoQuality);
+
+  useEffect(() => {
+    setActive(null);
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [feedId]);
 
   useEffect(() => {
     if (rawItems.length) cacheOfflineItems(rawItems);
@@ -314,7 +330,7 @@ function Viewer() {
           </div>
         )}
 
-        {query.isPending && items.length === 0 && <SkeletonWall />}
+        {query.isPending && items.length === 0 && <SkeletonWall key={feedId} />}
 
         {!query.isPending && !query.isError && items.length === 0 && (
           <div className="py-24 text-center">
@@ -336,10 +352,10 @@ function Viewer() {
         )}
 
         {items.length > 0 && browseMode === "wall" && (
-          <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4 [&>*]:mb-4">
+          <div key={feedId} className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4 [&>*]:mb-4">
             {items.map((item, i) => (
               <MediaCard
-                key={item.id + i}
+                key={`${feedId}-${item.id}`}
                 item={item}
                 index={i}
                 onOpen={setActive}
@@ -354,10 +370,10 @@ function Viewer() {
         )}
 
         {items.length > 0 && browseMode === "feed" && (
-          <div className="flex flex-col">
+          <div key={feedId} className="flex flex-col">
             {items.map((item, i) => (
               <FeedPanel
-                key={item.id + i}
+                key={`${feedId}-${item.id}`}
                 onSwipeUp={() => scrollToFeed(i + 1)}
               >
                 <div data-feed-index={i} className="flex w-full flex-col items-center">
@@ -379,10 +395,10 @@ function Viewer() {
         )}
 
         {items.length > 0 && browseMode === "theater" && (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div key={feedId} className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {items.map((item, i) => (
               <MediaCard
-                key={item.id + i}
+                key={`${feedId}-${item.id}`}
                 item={item}
                 index={i}
                 onOpen={setActive}

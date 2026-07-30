@@ -12,6 +12,10 @@ export type PremiumSettings = {
   immersive: boolean;
   sounds: boolean;
   prefetchCount: number;
+  shuffle: boolean;
+  hideSeen: boolean;
+  feedAutoplay: boolean;
+  feedAutoplaySec: number;
 };
 
 export type CustomMix = {
@@ -33,6 +37,7 @@ const MIXES_KEY = "peek:premium:mixes";
 const HISTORY_KEY = "peek:premium:history";
 const OFFLINE_KEY = "peek:premium:offline";
 const RECENT_GENRES_KEY = "peek:premium:genres";
+const SEEN_KEY = "peek:premium:seen";
 
 export const DEFAULT_SETTINGS: PremiumSettings = {
   videoQuality: "sd",
@@ -42,6 +47,10 @@ export const DEFAULT_SETTINGS: PremiumSettings = {
   immersive: false,
   sounds: true,
   prefetchCount: 3,
+  shuffle: false,
+  hideSeen: false,
+  feedAutoplay: false,
+  feedAutoplaySec: 6,
 };
 
 function read<T>(key: string, fallback: T): T {
@@ -134,6 +143,7 @@ export function recordBrowse(subreddit: string, genre?: string) {
   const history = read<BrowseRecord[]>(HISTORY_KEY, []);
   history.unshift({ subreddit, genre, at: Date.now() });
   write(HISTORY_KEY, history.slice(0, 100));
+  window.dispatchEvent(new Event("peek-history"));
 
   if (genre) {
     const genres = read<string[]>(RECENT_GENRES_KEY, []);
@@ -158,4 +168,45 @@ export function cacheOfflineItems(items: RedditMedia[]) {
 
 export function getOfflineItems(): RedditMedia[] {
   return read<RedditMedia[]>(OFFLINE_KEY, []);
+}
+
+export function getSeenIds(): Set<string> {
+  return new Set(read<string[]>(SEEN_KEY, []));
+}
+
+export function isSeen(id: string): boolean {
+  return getSeenIds().has(id);
+}
+
+export function markSeen(id: string) {
+  const ids = read<string[]>(SEEN_KEY, []);
+  if (ids.includes(id)) return;
+  write(SEEN_KEY, [id, ...ids].slice(0, 2000));
+  window.dispatchEvent(new Event("peek-seen"));
+}
+
+export function markManySeen(ids: string[]) {
+  if (!ids.length) return;
+  const set = getSeenIds();
+  for (const id of ids) set.add(id);
+  write(SEEN_KEY, [...set].slice(0, 2000));
+  window.dispatchEvent(new Event("peek-seen"));
+}
+
+export function clearSeen() {
+  write(SEEN_KEY, []);
+  window.dispatchEvent(new Event("peek-seen"));
+}
+
+export function getRecentSubs(limit = 8): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const row of getBrowseHistory()) {
+    const sub = row.subreddit.toLowerCase();
+    if (seen.has(sub)) continue;
+    seen.add(sub);
+    out.push(row.subreddit);
+    if (out.length >= limit) break;
+  }
+  return out;
 }

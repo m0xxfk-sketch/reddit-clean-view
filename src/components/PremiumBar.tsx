@@ -1,18 +1,26 @@
 import {
   Compass,
+  Dices,
+  EyeOff,
   Heart,
+  History,
+  Keyboard,
   Layers,
   Lock,
+  Shuffle,
   SlidersHorizontal,
   Sparkles,
+  Timer,
   Volume2,
   VolumeX,
   Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { CustomMixDialog } from "@/components/CustomMixDialog";
 import { FavoritesPanel } from "@/components/FavoritesPanel";
+import { HistoryPanel } from "@/components/HistoryPanel";
+import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import {
   Select,
   SelectContent,
@@ -29,15 +37,39 @@ type Props = {
   onDiscover: () => void;
   onCustomMix: (mix: CustomMix) => void;
   onShowFavorites: () => void;
+  onPickSub: (name: string) => void;
+  onSurprise: () => void;
   showingFavorites?: boolean;
 };
 
-export function PremiumBar({ onDiscover, onCustomMix, onShowFavorites, showingFavorites }: Props) {
+export function PremiumBar({
+  onDiscover,
+  onCustomMix,
+  onShowFavorites,
+  onPickSub,
+  onSurprise,
+  showingFavorites,
+}: Props) {
   const { settings, update } = usePremiumSettings();
   const [mixOpen, setMixOpen] = useState(false);
   const [favOpen, setFavOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const tick = () => playTick(settings.sounds);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "?") {
+        e.preventDefault();
+        setShortcutsOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <>
@@ -64,6 +96,30 @@ export function PremiumBar({ onDiscover, onCustomMix, onShowFavorites, showingFa
         >
           <Layers className="size-3.5" />
           Custom mix
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            onSurprise();
+            tick();
+          }}
+          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-muted-foreground transition hover:text-foreground"
+        >
+          <Dices className="size-3.5" />
+          Surprise me
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setHistoryOpen(true);
+            tick();
+          }}
+          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-muted-foreground transition hover:text-foreground"
+        >
+          <History className="size-3.5" />
+          History
         </button>
 
         <button
@@ -145,6 +201,60 @@ export function PremiumBar({ onDiscover, onCustomMix, onShowFavorites, showingFa
 
         <button
           type="button"
+          aria-pressed={settings.shuffle}
+          onClick={() => {
+            update({ shuffle: !settings.shuffle });
+            tick();
+          }}
+          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 transition ${
+            settings.shuffle
+              ? "border-primary/50 bg-primary/10 text-primary"
+              : "border-border text-muted-foreground hover:text-foreground"
+          }`}
+          title="Shuffle feed order"
+        >
+          <Shuffle className="size-3.5" />
+          Shuffle
+        </button>
+
+        <button
+          type="button"
+          aria-pressed={settings.hideSeen}
+          onClick={() => {
+            update({ hideSeen: !settings.hideSeen });
+            tick();
+          }}
+          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 transition ${
+            settings.hideSeen
+              ? "border-primary/50 bg-primary/10 text-primary"
+              : "border-border text-muted-foreground hover:text-foreground"
+          }`}
+          title="Hide posts you've already viewed"
+        >
+          <EyeOff className="size-3.5" />
+          Hide seen
+        </button>
+
+        <button
+          type="button"
+          aria-pressed={settings.feedAutoplay}
+          onClick={() => {
+            update({ feedAutoplay: !settings.feedAutoplay });
+            tick();
+          }}
+          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 transition ${
+            settings.feedAutoplay
+              ? "border-primary/50 bg-primary/10 text-primary"
+              : "border-border text-muted-foreground hover:text-foreground"
+          }`}
+          title="Auto-advance in feed mode"
+        >
+          <Timer className="size-3.5" />
+          Autoplay
+        </button>
+
+        <button
+          type="button"
           aria-pressed={settings.immersive}
           onClick={() => {
             update({ immersive: !settings.immersive });
@@ -158,6 +268,19 @@ export function PremiumBar({ onDiscover, onCustomMix, onShowFavorites, showingFa
         >
           <Sparkles className="size-3.5" />
           Immersive
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setShortcutsOpen(true);
+            tick();
+          }}
+          className="rounded-full border border-border p-2 text-muted-foreground transition hover:text-foreground"
+          aria-label="Keyboard shortcuts"
+          title="Shortcuts (?)"
+        >
+          <Keyboard className="size-3.5" />
         </button>
 
         <button
@@ -186,6 +309,8 @@ export function PremiumBar({ onDiscover, onCustomMix, onShowFavorites, showingFa
 
       <CustomMixDialog open={mixOpen} onOpenChange={setMixOpen} onSave={onCustomMix} />
       <FavoritesPanel open={favOpen} onOpenChange={setFavOpen} />
+      <HistoryPanel open={historyOpen} onOpenChange={setHistoryOpen} onPickSub={onPickSub} />
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </>
   );
 }

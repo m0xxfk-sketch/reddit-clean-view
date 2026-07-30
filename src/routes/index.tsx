@@ -9,17 +9,20 @@ import { MediaCard } from "@/components/MediaCard";
 import { NsfwGenreSelect, NSFW_MIX_VALUE } from "@/components/NsfwGenreSelect";
 import { PremiumBar } from "@/components/PremiumBar";
 import { AccessGate } from "@/components/AccessGate";
+import { RecentSubsBar } from "@/components/RecentSubsBar";
 import { useMediaPrefetch } from "@/hooks/use-media-prefetch";
 import { useAutoLoadMore } from "@/hooks/use-auto-load-more";
 import { usePremiumSettings } from "@/hooks/use-premium-settings";
+import { applyDisplayFilters } from "@/lib/feed-display";
 import { filterMedia } from "@/lib/feed-filters";
-import { fetchMixFeed } from "@/lib/nsfw-subreddits";
+import { fetchMixFeed, NSFW_TOP_SUBREDDITS } from "@/lib/nsfw-subreddits";
 import { fetchSubredditImages, type RedditMedia } from "@/lib/reddit";
 import {
   cacheOfflineItems,
   getFavorites,
   getOfflineItems,
   getRecentGenres,
+  markSeen,
   recordBrowse,
   type CustomMix,
 } from "@/lib/premium-store";
@@ -140,6 +143,16 @@ function Viewer() {
     [rawItems, settings.mediaFilter, settings.minScore, settings.timeFilter],
   );
 
+  const displayItems = useMemo(
+    () =>
+      applyDisplayFilters(items, {
+        hideSeen: settings.hideSeen,
+        shuffle: settings.shuffle,
+        seed: feedId,
+      }),
+    [items, settings.hideSeen, settings.shuffle, feedId],
+  );
+
   const { sentinelRef, maybeLoadMore } = useAutoLoadMore({
     enabled: feedMode === "sub",
     hasNextPage: Boolean(query.hasNextPage),
@@ -149,18 +162,19 @@ function Viewer() {
 
   const goToFeedIndex = useCallback(
     (next: number) => {
-      if (!items.length) return;
-      const clamped = Math.max(0, Math.min(next, items.length - 1));
+      if (!displayItems.length) return;
+      const clamped = Math.max(0, Math.min(next, displayItems.length - 1));
       setFeedIndex(clamped);
+      markSeen(displayItems[clamped].id);
       document
         .querySelector(`[data-feed-index="${clamped}"]`)
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
-      maybeLoadMore(clamped, items.length);
+      maybeLoadMore(clamped, displayItems.length);
     },
-    [items.length, maybeLoadMore],
+    [displayItems, maybeLoadMore],
   );
 
-  useMediaPrefetch(items, active, settings.prefetchCount, settings.videoQuality);
+  useMediaPrefetch(displayItems, active, settings.prefetchCount, settings.videoQuality);
 
   useEffect(() => {
     setActive(null);
@@ -194,6 +208,35 @@ function Viewer() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, [settings.immersive]);
+
+  useEffect(() => {
+    if (browseMode !== "feed" || active !== null || !settings.feedAutoplay || !displayItems.length) {
+      return;
+    }
+
+    const ms = Math.max(3, settings.feedAutoplaySec) * 1000;
+    const timer = setInterval(() => {
+      setFeedIndex((current) => {
+        const next = current + 1;
+        if (next >= displayItems.length) return current;
+        markSeen(displayItems[next].id);
+        document
+          .querySelector(`[data-feed-index="${next}"]`)
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        maybeLoadMore(next, displayItems.length);
+        return next;
+      });
+    }, ms);
+
+    return () => clearInterval(timer);
+  }, [
+    browseMode,
+    active,
+    settings.feedAutoplay,
+    settings.feedAutoplaySec,
+    displayItems,
+    maybeLoadMore,
+  ]);
 
   useEffect(() => {
     if (browseMode !== "feed" || active !== null) return;
@@ -233,6 +276,18 @@ function Viewer() {
     recordBrowse(name);
     if (topSort) setSort("top");
     playTick(settings.sounds);
+  };
+
+  const surpriseSub = () => {
+    const pool = NSFW_TOP_SUBREDDITS;
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    if (pick) pickSub(pick.name, true);
+  };
+
+  const openViewer = (index: number) => {
+    const item = displayItems[index];
+    if (item) markSeen(item.id);
+    setActive(index);
   };
 
   const scrollToFeed = (i: number) => goToFeedIndex(i);
@@ -346,7 +401,10 @@ function Viewer() {
               query.refetch();
             }}
             onShowFavorites={() => setFeedMode("favorites")}
+            onPickSub={(name) => pickSub(name, true)}
+            onSurprise={surpriseSub}
           />
+          <RecentSubsBar current={feedMode === "sub" ? subreddit : undefined} onPick={(name) => pickSub(name, true)} />
         </div>
       </header>
 
@@ -373,11 +431,13 @@ function Viewer() {
 
         {query.isPending && items.length === 0 && <SkeletonWall key={feedId} />}
 
-        {!query.isPending && !query.isError && items.length === 0 && (
+        {!query.isPending && !query.isError && displayItems.length === 0 && (
           <div className="py-24 text-center">
             <p className="text-sm text-muted-foreground">
               {rawItems.length > 0
-                ? "No media matches your filters. Try adjusting score or media type."
+                ? items.length > 0
+                  ? "Everything here is marked seen. Turn off Hide seen or clear history."
+                  : "No media matches your filters. Try adjusting score or media type."
                 : "Nothing loaded yet. Check your connection or pick a subreddit."}
             </p>
             {rawItems.length === 0 && (
@@ -392,14 +452,14 @@ function Viewer() {
           </div>
         )}
 
-        {items.length > 0 && browseMode === "wall" && (
+        {displayItems.length > 0 && browseMode === "wall" && (
           <div key={feedId} className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4 [&>*]:mb-4">
-            {items.map((item, i) => (
+            {displayItems.map((item, i) => (
               <MediaCard
                 key={`${feedId}-${item.id}`}
                 item={item}
                 index={i}
-                onOpen={setActive}
+                onOpen={openViewer}
                 videoQuality={settings.videoQuality}
                 sounds={settings.sounds}
                 showPip
@@ -410,9 +470,9 @@ function Viewer() {
           </div>
         )}
 
-        {items.length > 0 && browseMode === "feed" && (
+        {displayItems.length > 0 && browseMode === "feed" && (
           <div key={feedId} className="flex flex-col">
-            {items.map((item, i) => (
+            {displayItems.map((item, i) => (
               <FeedPanel
                 key={`${feedId}-${item.id}`}
                 onSwipeUp={() => scrollToFeed(i + 1)}
@@ -421,7 +481,7 @@ function Viewer() {
                   <MediaCard
                     item={item}
                     index={i}
-                    onOpen={setActive}
+                    onOpen={openViewer}
                     videoQuality={settings.videoQuality}
                     sounds={settings.sounds}
                     overlay="always"
@@ -435,14 +495,14 @@ function Viewer() {
           </div>
         )}
 
-        {items.length > 0 && browseMode === "theater" && (
+        {displayItems.length > 0 && browseMode === "theater" && (
           <div key={feedId} className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {items.map((item, i) => (
+            {displayItems.map((item, i) => (
               <MediaCard
                 key={`${feedId}-${item.id}`}
                 item={item}
                 index={i}
-                onOpen={setActive}
+                onOpen={openViewer}
                 videoQuality={settings.videoQuality}
                 sounds={settings.sounds}
                 showPip
@@ -480,10 +540,14 @@ function Viewer() {
 
       {active !== null && (
         <FocusViewer
-          items={items}
+          items={displayItems}
           index={active}
           onClose={() => setActive(null)}
-          onNavigate={setActive}
+          onNavigate={(i) => {
+            const item = displayItems[i];
+            if (item) markSeen(item.id);
+            setActive(i);
+          }}
           videoQuality={settings.videoQuality}
           sounds={settings.sounds}
           immersive={settings.immersive}

@@ -12,7 +12,6 @@ import {
 } from "@/lib/pin-auth-client";
 
 type GateState = "loading" | "setup" | "locked" | "open";
-type PinMode = "server" | "client";
 
 const MIN_LEN = 4;
 const MAX_LEN = 8;
@@ -20,7 +19,6 @@ const DOTS = 4;
 
 export function PinGate({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<GateState>("loading");
-  const [mode, setMode] = useState<PinMode>("client");
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [setupStep, setSetupStep] = useState<"create" | "confirm">("create");
@@ -31,11 +29,6 @@ export function PinGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchPinStatus().then((status) => {
-      setMode(status.mode);
-      if (status.mode === "server") {
-        setState(status.unlocked ? "open" : "locked");
-        return;
-      }
       if (!hasLocalPin()) {
         setState("setup");
         return;
@@ -152,9 +145,7 @@ export function PinGate({ children }: { children: React.ReactNode }) {
     ? setupStep === "create"
       ? "Choose a PIN to lock Peek. You'll need it every time you open the app."
       : "Enter the same PIN again to confirm."
-    : mode === "server"
-      ? "This gallery is PIN-protected."
-      : "Enter your PIN to unlock Peek.";
+    : "Enter your PIN to unlock Peek.";
 
   return (
     <div className="grain flex min-h-screen items-center justify-center px-6">

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Search, Loader2, LayoutGrid, Rows3, Monitor } from "lucide-react";
 
 import { FeedPanel } from "@/components/FeedPanel";
@@ -10,6 +10,7 @@ import { NsfwGenreSelect, NSFW_MIX_VALUE } from "@/components/NsfwGenreSelect";
 import { PremiumBar } from "@/components/PremiumBar";
 import { AccessGate } from "@/components/AccessGate";
 import { useMediaPrefetch } from "@/hooks/use-media-prefetch";
+import { useAutoLoadMore } from "@/hooks/use-auto-load-more";
 import { usePremiumSettings } from "@/hooks/use-premium-settings";
 import { filterMedia } from "@/lib/feed-filters";
 import { fetchMixFeed } from "@/lib/nsfw-subreddits";
@@ -63,6 +64,7 @@ function Viewer() {
   const [customMix, setCustomMix] = useState<CustomMix | null>(null);
   const [browseMode, setBrowseMode] = useState<BrowseMode>("wall");
   const [active, setActive] = useState<number | null>(null);
+  const [feedIndex, setFeedIndex] = useState(0);
   const [headerHidden, setHeaderHidden] = useState(false);
 
   const feedId = useMemo(() => {
@@ -138,10 +140,31 @@ function Viewer() {
     [rawItems, settings.mediaFilter, settings.minScore, settings.timeFilter],
   );
 
+  const { sentinelRef, maybeLoadMore } = useAutoLoadMore({
+    enabled: feedMode === "sub",
+    hasNextPage: Boolean(query.hasNextPage),
+    isFetching: query.isFetchingNextPage,
+    fetchNextPage: () => void query.fetchNextPage(),
+  });
+
+  const goToFeedIndex = useCallback(
+    (next: number) => {
+      if (!items.length) return;
+      const clamped = Math.max(0, Math.min(next, items.length - 1));
+      setFeedIndex(clamped);
+      document
+        .querySelector(`[data-feed-index="${clamped}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      maybeLoadMore(clamped, items.length);
+    },
+    [items.length, maybeLoadMore],
+  );
+
   useMediaPrefetch(items, active, settings.prefetchCount, settings.videoQuality);
 
   useEffect(() => {
     setActive(null);
+    setFeedIndex(0);
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [feedId]);
 
@@ -172,6 +195,26 @@ function Viewer() {
     return () => window.removeEventListener("scroll", onScroll);
   }, [settings.immersive]);
 
+  useEffect(() => {
+    if (browseMode !== "feed" || active !== null) return;
+
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      if (e.key === "ArrowDown" || e.key === "j") {
+        e.preventDefault();
+        goToFeedIndex(feedIndex + 1);
+      } else if (e.key === "ArrowUp" || e.key === "k") {
+        e.preventDefault();
+        goToFeedIndex(feedIndex - 1);
+      }
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [browseMode, active, feedIndex, goToFeedIndex]);
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const clean = draft.trim().replace(/^\/?r\//i, "");
@@ -192,9 +235,7 @@ function Viewer() {
     playTick(settings.sounds);
   };
 
-  const scrollToFeed = (i: number) => {
-    document.querySelector(`[data-feed-index="${i}"]`)?.scrollIntoView({ behavior: "smooth" });
-  };
+  const scrollToFeed = (i: number) => goToFeedIndex(i);
 
   return (
     <div className="grain min-h-screen">
@@ -414,17 +455,26 @@ function Viewer() {
           </div>
         )}
 
-        {query.hasNextPage && feedMode === "sub" && (
-          <div className="flex justify-center py-12">
-            <button
-              onClick={() => query.fetchNextPage()}
-              disabled={query.isFetchingNextPage}
-              className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-6 py-3 text-sm transition hover:bg-surface-raised disabled:opacity-60"
-            >
-              {query.isFetchingNextPage && <Loader2 className="size-4 animate-spin" />}
-              Load more
-            </button>
-          </div>
+        {feedMode === "sub" && query.hasNextPage && (
+          <>
+            <div ref={sentinelRef} className="h-1" aria-hidden />
+            <div className="flex justify-center py-8">
+              {query.isFetchingNextPage ? (
+                <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  Loading more…
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => query.fetchNextPage()}
+                  className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-6 py-3 text-sm transition hover:bg-surface-raised"
+                >
+                  Load more
+                </button>
+              )}
+            </div>
+          </>
         )}
       </main>
 

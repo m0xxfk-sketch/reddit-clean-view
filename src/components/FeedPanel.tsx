@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
-/** Feed panel with swipe-up to advance. */
+/** Feed panel with swipe-up to advance. Keyboard nav is handled by the parent viewer. */
 export function FeedPanel({
   children,
   onSwipeUp,
@@ -9,14 +9,6 @@ export function FeedPanel({
   onSwipeUp?: () => void;
 }) {
   const touch = useRef<{ y: number; t: number } | null>(null);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowDown" || e.key === "j") onSwipeUp?.();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onSwipeUp]);
 
   return (
     <div

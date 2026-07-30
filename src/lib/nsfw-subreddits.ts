@@ -8,7 +8,8 @@ export type NsfwCategory =
   | "theme"
   | "couples"
   | "celeb"
-  | "cosplay";
+  | "cosplay"
+  | "alt";
 
 export type NsfwSubreddit = {
   name: string;
@@ -100,6 +101,51 @@ export const NSFW_TOP_SUBREDDITS: readonly NsfwSubreddit[] = [
   { rank: 80, name: "cosplaybabes", category: "cosplay", label: "Cosplay Babes" },
   { rank: 81, name: "RealAhegao", category: "cosplay", label: "Ahegao" },
   { rank: 82, name: "lewd", category: "cosplay", label: "Lewd" },
+  { rank: 83, name: "nsfwhardcore", category: "general", label: "Hardcore" },
+  { rank: 84, name: "randomsexiness", category: "general", label: "Random Sexiness" },
+  { rank: 85, name: "trashyboners", category: "general", label: "Trashy" },
+  { rank: 86, name: "TooCuteForPorn", category: "general", label: "Too Cute" },
+  { rank: 87, name: "HappyEmbarrassedGirls", category: "general", label: "Happy & Embarrassed" },
+  { rank: 88, name: "GirlsFinishingTheJob", category: "general", label: "Finishing" },
+  { rank: 89, name: "gonewild18", category: "amateur", label: "GW 18" },
+  { rank: 90, name: "gonewildplus", category: "amateur", label: "GW Plus" },
+  { rank: 91, name: "GoneWildTube", category: "amateur", label: "GW Tube" },
+  { rank: 92, name: "GoneWildScrubs", category: "amateur", label: "GW Scrubs" },
+  { rank: 93, name: "Asstastic", category: "body-type", label: "Asstastic" },
+  { rank: 94, name: "Stacked", category: "body-type", label: "Stacked" },
+  { rank: 95, name: "homegrowntits", category: "body-type", label: "Homegrown" },
+  { rank: 96, name: "torpedotits", category: "body-type", label: "Torpedo Tits" },
+  { rank: 97, name: "ghostnipples", category: "body-type", label: "Ghost Nipples" },
+  { rank: 98, name: "aa_cups", category: "body-type", label: "AA Cups" },
+  { rank: 99, name: "FortyFiveFiftyFive", category: "body-type", label: "45/55" },
+  { rank: 100, name: "MiddleEasternHotties", category: "ethnicity", label: "Middle Eastern" },
+  { rank: 101, name: "AfriGoneWild", category: "ethnicity", label: "Afri GW" },
+  { rank: 102, name: "LatinasGW", category: "ethnicity", label: "Latinas GW" },
+  { rank: 103, name: "JewishBabes", category: "ethnicity", label: "Jewish" },
+  { rank: 104, name: "Mexicana", category: "ethnicity", label: "Mexicana" },
+  { rank: 105, name: "dressedandundressed", category: "theme", label: "Dressed & Undressed" },
+  { rank: 106, name: "stripgirls", category: "theme", label: "Strip" },
+  { rank: 107, name: "FaceAndTits", category: "theme", label: "Face & Tits" },
+  { rank: 108, name: "cleavage", category: "theme", label: "Cleavage" },
+  { rank: 109, name: "GirlsInLeggings", category: "theme", label: "Leggings" },
+  { rank: 110, name: "pussy", category: "theme", label: "Pussy" },
+  { rank: 111, name: "ButtsAndBareFeet", category: "theme", label: "Butts & Feet" },
+  { rank: 112, name: "Threesome", category: "couples", label: "Threesome" },
+  { rank: 113, name: "Polyamory", category: "couples", label: "Polyamory" },
+  { rank: 114, name: "HotWifeLifestyle", category: "couples", label: "Hotwife Life" },
+  { rank: 115, name: "CelebrityNipples", category: "celeb", label: "Celebrity Nipples" },
+  { rank: 116, name: "CelebsBR", category: "celeb", label: "Celebs BR" },
+  { rank: 117, name: "rule34", category: "cosplay", label: "Rule 34" },
+  { rank: 118, name: "gothsluts", category: "alt", label: "Goth Sluts" },
+  { rank: 119, name: "altgonewild", category: "alt", label: "Alt GW" },
+  { rank: 120, name: "EmoGirls", category: "alt", label: "Emo Girls" },
+  { rank: 121, name: "PunkGirls", category: "alt", label: "Punk Girls" },
+  { rank: 122, name: "HotTubGirls", category: "alt", label: "Hot Tub" },
+  { rank: 123, name: "TattoosPorn", category: "alt", label: "Tattoos" },
+  { rank: 124, name: "PiercedNSFW", category: "alt", label: "Pierced" },
+  { rank: 125, name: "GoneWildTrans", category: "alt", label: "Trans GW" },
+  { rank: 126, name: "trapsgonewild", category: "alt", label: "Traps GW" },
+  { rank: 127, name: "FemBoys", category: "alt", label: "Femboys" },
 ] as const;
 
 export const NSFW_GENRE_LABELS: Record<NsfwCategory, string> = {
@@ -110,7 +156,8 @@ export const NSFW_GENRE_LABELS: Record<NsfwCategory, string> = {
   theme: "Themes",
   couples: "Couples",
   celeb: "Celebs",
-  cosplay: "Cosplay",
+  cosplay: "Cosplay & Hentai",
+  alt: "Alt & Niche",
 };
 
 const GENRE_ORDER: NsfwCategory[] = [
@@ -122,6 +169,7 @@ const GENRE_ORDER: NsfwCategory[] = [
   "couples",
   "celeb",
   "cosplay",
+  "alt",
 ];
 
 export type NsfwGenreGroup = {

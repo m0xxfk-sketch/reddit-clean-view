@@ -19,9 +19,9 @@ function itemMediaKind(item: RedditMedia): "image" | "video" {
   return "image";
 }
 
-const TITLE = "Peek — a clean image viewer for Reddit";
+const TITLE = "Peek — premium NSFW Reddit viewer";
 const DESC =
-  "Browse any subreddit as a quiet, full-bleed image wall. No comments, no ads, no clutter — just pictures and a keyboard-driven lightbox.";
+  "A cinematic, distraction-free viewer for NSFW Reddit. Browse by genre, autoplay GIFs, and explore with wall, feed, or theater modes.";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -37,7 +37,6 @@ export const Route = createFileRoute("/")({
 });
 
 const SORTS = ["hot", "new", "top", "rising"] as const;
-const PRESETS = ["EarthPorn", "CityPorn", "AnalogCommunity", "Art"];
 
 function Index() {
   return (
@@ -48,10 +47,10 @@ function Index() {
 }
 
 function Viewer() {
-  const [subreddit, setSubreddit] = useState("EarthPorn");
-  const [draft, setDraft] = useState("EarthPorn");
-  const [sort, setSort] = useState<(typeof SORTS)[number]>("hot");
-  const [mixTop, setMixTop] = useState(false);
+  const [subreddit, setSubreddit] = useState("gonewild");
+  const [draft, setDraft] = useState("gonewild");
+  const [sort, setSort] = useState<(typeof SORTS)[number]>("top");
+  const [mixTop, setMixTop] = useState(true);
   const [browseMode, setBrowseMode] = useState<BrowseMode>("wall");
   const [active, setActive] = useState<number | null>(null);
 
@@ -162,35 +161,16 @@ function Viewer() {
           </div>
         </div>
 
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 px-5 pb-4">
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-muted-foreground">Try</span>
-            {PRESETS.map((p) => (
-              <button
-                key={p}
-                onClick={() => pickSub(p)}
-                className={`rounded-full border px-3 py-1 transition ${
-                  !mixTop && subreddit.toLowerCase() === p.toLowerCase()
-                    ? "border-primary/50 text-primary"
-                    : "border-border text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                r/{p}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-muted-foreground">NSFW</span>
-            <NsfwGenreSelect
-              value={mixTop ? NSFW_MIX_VALUE : subreddit}
-              onPickSub={(name) => pickSub(name, true)}
-              onPickMix={() => {
-                setMixTop(true);
-                setSort("top");
-              }}
-            />
-          </div>
+        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-2 px-5 pb-4 text-xs">
+          <span className="text-muted-foreground">Browse</span>
+          <NsfwGenreSelect
+            value={mixTop ? NSFW_MIX_VALUE : subreddit}
+            onPickSub={(name) => pickSub(name, true)}
+            onPickMix={() => {
+              setMixTop(true);
+              setSort("top");
+            }}
+          />
         </div>
       </header>
 

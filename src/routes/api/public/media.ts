@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { decodeHtmlEntities, isAllowedImageUrl, normalizeImageUrl } from "@/lib/image-url";
 import { isAllowedMediaUrl } from "@/lib/media-url";
+import { requirePinAuth } from "@/lib/pin-auth-server";
 
 const UA = "web:peek-image-viewer:v1 (by /u/peek)";
 const CACHE = "public, max-age=86400, stale-while-revalidate=604800";
@@ -10,6 +11,8 @@ export const Route = createFileRoute("/api/public/media")({
   server: {
     handlers: {
       GET: async ({ request }) => {
+        const denied = await requirePinAuth(request);
+        if (denied) return denied;
         const raw = new URL(request.url).searchParams.get("url") ?? "";
         const decoded = decodeHtmlEntities(raw);
         const url = normalizeImageUrl(decoded);

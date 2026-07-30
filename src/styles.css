@@ -206,6 +206,21 @@
     }
   }
 
+  @keyframes shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    20%,
+    60% {
+      transform: translateX(-6px);
+    }
+    40%,
+    80% {
+      transform: translateX(6px);
+    }
+  }
+
   .focus-viewer.focus-immersive header,
   .focus-viewer.focus-immersive .filmstrip-hide {
     transition: opacity 0.3s;

@@ -1,11 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { fetchRedditListing, ListingError } from "@/lib/reddit-server";
+import { requirePinAuth } from "@/lib/pin-auth-server";
 
 export const Route = createFileRoute("/api/public/reddit")({
   server: {
     handlers: {
       GET: async ({ request }) => {
+        const denied = await requirePinAuth(request);
+        if (denied) return denied;
         const params = new URL(request.url).searchParams;
         const sub = (params.get("subreddit") ?? "").replace(/[^a-zA-Z0-9_]/g, "");
         const sort = ["hot", "new", "top", "rising"].includes(params.get("sort") ?? "")

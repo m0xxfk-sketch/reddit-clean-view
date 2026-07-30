@@ -73,6 +73,7 @@ export async function fetchSubredditImages(data: FetchArgs): Promise<FetchResult
     try {
       res = await fetch(`/api/public/reddit?${params.toString()}`, {
         headers: { Accept: "application/json" },
+        credentials: "include",
       });
     } catch {
       lastError = new Error("Network error. Check your connection and try again.");
@@ -125,6 +126,7 @@ export async function fetchUserPosts(data: FetchArgs & { user: string }): Promis
 
   const res = await fetch(`/api/public/reddit/user?${params}`, {
     headers: { Accept: "application/json" },
+    credentials: "include",
   });
   const json = (await res.json()) as FetchResult & { error?: string };
   if (!res.ok) throw new Error(json.error ?? `Request failed (${res.status}).`);

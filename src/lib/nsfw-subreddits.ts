@@ -253,6 +253,7 @@ export async function fetchMixFeed(options: MixFeedOptions = {}): Promise<NsfwTo
 
   const res = await fetch(`/api/public/reddit/mix?${params}`, {
     headers: { Accept: "application/json" },
+    credentials: "include",
   });
 
   const json = (await res.json()) as NsfwTopFeedResult & { error?: string };

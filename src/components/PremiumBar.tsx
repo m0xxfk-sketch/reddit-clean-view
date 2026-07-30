@@ -2,6 +2,7 @@ import {
   Compass,
   Heart,
   Layers,
+  Lock,
   SlidersHorizontal,
   Sparkles,
   Volume2,
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { usePremiumSettings } from "@/hooks/use-premium-settings";
 import type { CustomMix } from "@/lib/premium-store";
+import { lockApp } from "@/lib/pin-auth-client";
 import { playTick } from "@/lib/sounds";
 
 type Props = {
@@ -156,6 +158,19 @@ export function PremiumBar({ onDiscover, onCustomMix, onShowFavorites, showingFa
         >
           <Sparkles className="size-3.5" />
           Immersive
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            tick();
+            void lockApp();
+          }}
+          className="rounded-full border border-border p-2 text-muted-foreground transition hover:text-foreground"
+          aria-label="Lock app"
+          title="Lock with PIN"
+        >
+          <Lock className="size-3.5" />
         </button>
 
         <button

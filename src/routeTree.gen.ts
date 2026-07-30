@@ -17,6 +17,9 @@ import { Route as ApiPublicImageRouteImport } from './routes/api/public/image'
 import { Route as ApiPublicRedditUserRouteImport } from './routes/api/public/reddit/user'
 import { Route as ApiPublicRedditMixRouteImport } from './routes/api/public/reddit/mix'
 import { Route as ApiPublicMediaResolveRouteImport } from './routes/api/public/media/resolve'
+import { Route as ApiPublicAuthStatusRouteImport } from './routes/api/public/auth/status'
+import { Route as ApiPublicAuthPinRouteImport } from './routes/api/public/auth/pin'
+import { Route as ApiPublicAuthLogoutRouteImport } from './routes/api/public/auth/logout'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -58,6 +61,21 @@ const ApiPublicMediaResolveRoute = ApiPublicMediaResolveRouteImport.update({
   path: '/resolve',
   getParentRoute: () => ApiPublicMediaRoute,
 } as any)
+const ApiPublicAuthStatusRoute = ApiPublicAuthStatusRouteImport.update({
+  id: '/api/public/auth/status',
+  path: '/api/public/auth/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicAuthPinRoute = ApiPublicAuthPinRouteImport.update({
+  id: '/api/public/auth/pin',
+  path: '/api/public/auth/pin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicAuthLogoutRoute = ApiPublicAuthLogoutRouteImport.update({
+  id: '/api/public/auth/logout',
+  path: '/api/public/auth/logout',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -65,6 +83,9 @@ export interface FileRoutesByFullPath {
   '/api/public/image': typeof ApiPublicImageRoute
   '/api/public/media': typeof ApiPublicMediaRouteWithChildren
   '/api/public/reddit': typeof ApiPublicRedditRouteWithChildren
+  '/api/public/auth/logout': typeof ApiPublicAuthLogoutRoute
+  '/api/public/auth/pin': typeof ApiPublicAuthPinRoute
+  '/api/public/auth/status': typeof ApiPublicAuthStatusRoute
   '/api/public/media/resolve': typeof ApiPublicMediaResolveRoute
   '/api/public/reddit/mix': typeof ApiPublicRedditMixRoute
   '/api/public/reddit/user': typeof ApiPublicRedditUserRoute
@@ -75,6 +96,9 @@ export interface FileRoutesByTo {
   '/api/public/image': typeof ApiPublicImageRoute
   '/api/public/media': typeof ApiPublicMediaRouteWithChildren
   '/api/public/reddit': typeof ApiPublicRedditRouteWithChildren
+  '/api/public/auth/logout': typeof ApiPublicAuthLogoutRoute
+  '/api/public/auth/pin': typeof ApiPublicAuthPinRoute
+  '/api/public/auth/status': typeof ApiPublicAuthStatusRoute
   '/api/public/media/resolve': typeof ApiPublicMediaResolveRoute
   '/api/public/reddit/mix': typeof ApiPublicRedditMixRoute
   '/api/public/reddit/user': typeof ApiPublicRedditUserRoute
@@ -86,6 +110,9 @@ export interface FileRoutesById {
   '/api/public/image': typeof ApiPublicImageRoute
   '/api/public/media': typeof ApiPublicMediaRouteWithChildren
   '/api/public/reddit': typeof ApiPublicRedditRouteWithChildren
+  '/api/public/auth/logout': typeof ApiPublicAuthLogoutRoute
+  '/api/public/auth/pin': typeof ApiPublicAuthPinRoute
+  '/api/public/auth/status': typeof ApiPublicAuthStatusRoute
   '/api/public/media/resolve': typeof ApiPublicMediaResolveRoute
   '/api/public/reddit/mix': typeof ApiPublicRedditMixRoute
   '/api/public/reddit/user': typeof ApiPublicRedditUserRoute
@@ -98,6 +125,9 @@ export interface FileRouteTypes {
     | '/api/public/image'
     | '/api/public/media'
     | '/api/public/reddit'
+    | '/api/public/auth/logout'
+    | '/api/public/auth/pin'
+    | '/api/public/auth/status'
     | '/api/public/media/resolve'
     | '/api/public/reddit/mix'
     | '/api/public/reddit/user'
@@ -108,6 +138,9 @@ export interface FileRouteTypes {
     | '/api/public/image'
     | '/api/public/media'
     | '/api/public/reddit'
+    | '/api/public/auth/logout'
+    | '/api/public/auth/pin'
+    | '/api/public/auth/status'
     | '/api/public/media/resolve'
     | '/api/public/reddit/mix'
     | '/api/public/reddit/user'
@@ -118,6 +151,9 @@ export interface FileRouteTypes {
     | '/api/public/image'
     | '/api/public/media'
     | '/api/public/reddit'
+    | '/api/public/auth/logout'
+    | '/api/public/auth/pin'
+    | '/api/public/auth/status'
     | '/api/public/media/resolve'
     | '/api/public/reddit/mix'
     | '/api/public/reddit/user'
@@ -129,6 +165,9 @@ export interface RootRouteChildren {
   ApiPublicImageRoute: typeof ApiPublicImageRoute
   ApiPublicMediaRoute: typeof ApiPublicMediaRouteWithChildren
   ApiPublicRedditRoute: typeof ApiPublicRedditRouteWithChildren
+  ApiPublicAuthLogoutRoute: typeof ApiPublicAuthLogoutRoute
+  ApiPublicAuthPinRoute: typeof ApiPublicAuthPinRoute
+  ApiPublicAuthStatusRoute: typeof ApiPublicAuthStatusRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -189,6 +228,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicMediaResolveRouteImport
       parentRoute: typeof ApiPublicMediaRoute
     }
+    '/api/public/auth/status': {
+      id: '/api/public/auth/status'
+      path: '/api/public/auth/status'
+      fullPath: '/api/public/auth/status'
+      preLoaderRoute: typeof ApiPublicAuthStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/auth/pin': {
+      id: '/api/public/auth/pin'
+      path: '/api/public/auth/pin'
+      fullPath: '/api/public/auth/pin'
+      preLoaderRoute: typeof ApiPublicAuthPinRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/auth/logout': {
+      id: '/api/public/auth/logout'
+      path: '/api/public/auth/logout'
+      fullPath: '/api/public/auth/logout'
+      preLoaderRoute: typeof ApiPublicAuthLogoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -224,6 +284,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicImageRoute: ApiPublicImageRoute,
   ApiPublicMediaRoute: ApiPublicMediaRouteWithChildren,
   ApiPublicRedditRoute: ApiPublicRedditRouteWithChildren,
+  ApiPublicAuthLogoutRoute: ApiPublicAuthLogoutRoute,
+  ApiPublicAuthPinRoute: ApiPublicAuthPinRoute,
+  ApiPublicAuthStatusRoute: ApiPublicAuthStatusRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { fetchRedditMix, ListingError } from "@/lib/reddit-server";
+import { requirePinAuth } from "@/lib/pin-auth-server";
 import { getNsfwTopSubreddits, pickDiscoverSubs } from "@/lib/nsfw-subreddits";
 
 export const Route = createFileRoute("/api/public/reddit/mix")({
   server: {
     handlers: {
       GET: async ({ request }) => {
+        const denied = await requirePinAuth(request);
+        if (denied) return denied;
         const params = new URL(request.url).searchParams;
         const sort = ["hot", "new", "top", "rising"].includes(params.get("sort") ?? "")
           ? params.get("sort")!

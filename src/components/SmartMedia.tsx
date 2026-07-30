@@ -91,6 +91,7 @@ export const SmartMedia = forwardRef<SmartMediaHandle, Props>(function SmartMedi
 
     fetch(
       `/api/public/media/resolve?url=${encodeURIComponent(src)}&quality=${videoQuality}`,
+      { credentials: "include" },
     )
       .then(async (res) => {
         if (!res.ok) throw new Error("resolve failed");

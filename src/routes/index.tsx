@@ -8,7 +8,7 @@ import { FocusViewer } from "@/components/FocusViewer";
 import { MediaCard } from "@/components/MediaCard";
 import { NsfwGenreSelect, NSFW_MIX_VALUE } from "@/components/NsfwGenreSelect";
 import { PremiumBar } from "@/components/PremiumBar";
-import { AgeGate } from "@/components/AgeGate";
+import { AccessGate } from "@/components/AccessGate";
 import { useMediaPrefetch } from "@/hooks/use-media-prefetch";
 import { usePremiumSettings } from "@/hooks/use-premium-settings";
 import { filterMedia } from "@/lib/feed-filters";
@@ -48,9 +48,9 @@ const SORTS = ["hot", "new", "top", "rising"] as const;
 
 function Index() {
   return (
-    <AgeGate>
+    <AccessGate>
       <Viewer />
-    </AgeGate>
+    </AccessGate>
   );
 }
 

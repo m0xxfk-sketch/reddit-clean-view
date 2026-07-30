@@ -3,7 +3,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
-import { AgeGate } from "@/components/AgeGate";
+import { AccessGate } from "@/components/AccessGate";
 import { FocusViewer } from "@/components/FocusViewer";
 import { MediaCard } from "@/components/MediaCard";
 import { usePremiumSettings } from "@/hooks/use-premium-settings";
@@ -16,9 +16,9 @@ export const Route = createFileRoute("/creator/$name")({
 
 function CreatorPage() {
   return (
-    <AgeGate>
+    <AccessGate>
       <CreatorProfile />
-    </AgeGate>
+    </AccessGate>
   );
 }
 

@@ -2,7 +2,6 @@ import { Lock, Delete } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import {
-  fetchPinStatus,
   hasLocalPin,
   isLocallyUnlocked,
   setLocalPin,
@@ -28,13 +27,11 @@ export function PinGate({ children }: { children: React.ReactNode }) {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchPinStatus().then((status) => {
-      if (!hasLocalPin()) {
-        setState("setup");
-        return;
-      }
-      setState(isLocallyUnlocked() ? "open" : "locked");
-    });
+    if (!hasLocalPin()) {
+      setState("setup");
+      return;
+    }
+    setState(isLocallyUnlocked() ? "open" : "locked");
   }, []);
 
   const fail = useCallback((message: string) => {
@@ -72,7 +69,7 @@ export function PinGate({ children }: { children: React.ReactNode }) {
     } finally {
       setSubmitting(false);
     }
-  }, [fail, mode, pin, remember, unlock]);
+  }, [fail, pin, remember, unlock]);
 
   const submitSetup = useCallback(async () => {
     if (setupStep === "create") {

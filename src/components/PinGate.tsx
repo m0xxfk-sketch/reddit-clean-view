@@ -4,20 +4,27 @@ import { useCallback, useEffect, useState } from "react";
 import {
   hasLocalPin,
   isLocallyUnlocked,
+  setAgeVerified,
   setLocalPin,
   unlockLocally,
   verifyLocalPin,
   verifyPinWithServer,
 } from "@/lib/pin-auth-client";
 
-type GateState = "loading" | "setup" | "locked" | "open";
+type GateState = "setup" | "locked" | "open";
+
+function readGateState(): GateState {
+  if (typeof window === "undefined") return "locked";
+  if (!hasLocalPin()) return "setup";
+  return isLocallyUnlocked() ? "open" : "locked";
+}
 
 const MIN_LEN = 4;
 const MAX_LEN = 8;
 const DOTS = 4;
 
 export function PinGate({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<GateState>("loading");
+  const [state, setState] = useState<GateState>(readGateState);
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [setupStep, setSetupStep] = useState<"create" | "confirm">("create");
@@ -27,11 +34,7 @@ export function PinGate({ children }: { children: React.ReactNode }) {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!hasLocalPin()) {
-      setState("setup");
-      return;
-    }
-    setState(isLocallyUnlocked() ? "open" : "locked");
+    setState(readGateState());
   }, []);
 
   const fail = useCallback((message: string) => {
@@ -65,6 +68,7 @@ export function PinGate({ children }: { children: React.ReactNode }) {
       // Best-effort server session when PEEK_PIN is configured in deployment secrets.
       await verifyPinWithServer(pin).catch(() => {});
       unlockLocally(remember);
+      setAgeVerified();
       unlock();
     } finally {
       setSubmitting(false);
@@ -92,6 +96,7 @@ export function PinGate({ children }: { children: React.ReactNode }) {
     }
 
     await setLocalPin(pin);
+    setAgeVerified();
     unlockLocally(remember);
     setPin("");
     setConfirmPin("");
@@ -122,14 +127,6 @@ export function PinGate({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(timer);
   }, [pin, state, submitPin, submitSetup]);
 
-  if (state === "loading") {
-    return (
-      <div className="grain flex min-h-screen items-center justify-center bg-background">
-        <div className="size-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-      </div>
-    );
-  }
-
   if (state === "open") return <>{children}</>;
 
   const isSetup = state === "setup";
@@ -140,7 +137,7 @@ export function PinGate({ children }: { children: React.ReactNode }) {
     : "Enter PIN";
   const subtitle = isSetup
     ? setupStep === "create"
-      ? "Choose a PIN to lock Peek. You'll need it every time you open the app."
+      ? "Choose a PIN to lock Peek. By continuing you confirm you are 18+ and that adult content is legal where you live."
       : "Enter the same PIN again to confirm."
     : "Enter your PIN to unlock Peek.";
 

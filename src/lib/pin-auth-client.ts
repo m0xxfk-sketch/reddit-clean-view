@@ -1,11 +1,22 @@
 const PIN_HASH_KEY = "peek.pin-hash";
 const UNLOCK_UNTIL_KEY = "peek.pin-unlock-until";
+const AGE_VERIFIED_KEY = "peek.age-verified";
 const UNLOCK_DAYS = 7;
 
 export async function hashPin(pin: string): Promise<string> {
   const data = new TextEncoder().encode(`peek:pin:${pin}`);
   const hash = await crypto.subtle.digest("SHA-256", data);
   return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export function isAgeVerified(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(AGE_VERIFIED_KEY) === "1";
+}
+
+export function setAgeVerified() {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(AGE_VERIFIED_KEY, "1");
 }
 
 export function hasLocalPin(): boolean {

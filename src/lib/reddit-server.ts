@@ -35,6 +35,7 @@ async function throttle() {
 
 import { decodeHtmlEntities, normalizeImageUrl } from "@/lib/image-url";
 import { isDirectVideoUrl, isRedgifsUrl, normalizePosterUrl } from "@/lib/media-url";
+import { pickRedgifsPlayback, resolveRedgifsUrl } from "@/lib/redgifs-server";
 
 async function getToken(): Promise<string | null> {
   const id = process.env.REDDIT_CLIENT_ID;
@@ -208,15 +209,18 @@ function parseRss(xml: string, sub: string): RedditListingResult {
     );
 
     const redgifs =
-      /href="(https:\/\/[^"]*redgifs\.com\/watch\/[^"]+)"/i.exec(content)?.[1] ??
-      /href="(https:\/\/[^"]*redgifs\.com\/ifr\/[^"]+)"/i.exec(content)?.[1];
-    const vreddit = /href="(https:\/\/v\.redd\.it\/[^"]+)"/i.exec(content)?.[1];
+      /href="(https:\/\/(?:www\.)?redgifs\.com\/watch\/[^"]+)"/i.exec(content)?.[1] ??
+      /href="(https:\/\/(?:www\.)?redgifs\.com\/ifr\/[^"]+)"/i.exec(content)?.[1];
+    const vreddit = /href="(https:\/\/v\.redd\.it\/[^"]+\.mp4[^"]*)"/i.exec(content)?.[1]
+      ?? /href="(https:\/\/v\.redd\.it\/[^"]+)"/i.exec(content)?.[1];
+    const ireddit =
+      /href="(https:\/\/i\.redd\.it\/[^"]+)"/i.exec(content)?.[1];
     const imgSrc =
       /src="(https:\/\/external-preview\.redd\.it\/[^"]+)"/.exec(content)?.[1] ??
       /src="(https:\/\/preview\.redd\.it\/[^"]+)"/.exec(content)?.[1] ??
       /src="(https:\/\/i\.redd\.it\/[^"]+)"/.exec(content)?.[1];
     const direct =
-      /href="(https:\/\/i\.redd\.it\/[^"]+)"/.exec(content)?.[1] ??
+      ireddit ??
       /href="(https:\/\/preview\.redd\.it\/[^"]+)"/.exec(content)?.[1] ??
       /src="(https:\/\/i\.redd\.it\/[^"]+)"/.exec(content)?.[1] ??
       /src="(https:\/\/preview\.redd\.it\/[^"]+)"/.exec(content)?.[1] ??
@@ -269,7 +273,7 @@ function parseRss(xml: string, sub: string): RedditListingResult {
 }
 
 function cacheKey(sub: string, sort: string, after: string) {
-  return `${sub.toLowerCase()}:${sort}:${after || "start"}`;
+  return `v2:${sub.toLowerCase()}:${sort}:${after || "start"}`;
 }
 
 function normalizeListing(payload: RedditListingResult): RedditListingResult {
@@ -277,13 +281,36 @@ function normalizeListing(payload: RedditListingResult): RedditListingResult {
     ...payload,
     items: payload.items.map((item) => ({
       ...item,
-      url: item.mediaKind === "video" && isRedgifsUrl(item.url)
-        ? item.url
-        : normalizeImageUrl(decodeHtmlEntities(item.url)),
-      posterUrl: normalizePosterUrl(item.posterUrl),
+      url:
+        item.mediaKind === "video" && isRedgifsUrl(item.url)
+          ? item.url
+          : item.mediaKind === "video" && isDirectVideoUrl(item.url)
+            ? normalizeImageUrl(decodeHtmlEntities(item.url))
+            : normalizeImageUrl(decodeHtmlEntities(item.url)),
+      posterUrl: item.posterUrl ? normalizePosterUrl(item.posterUrl) : undefined,
       mediaKind: item.mediaKind ?? "image",
     })),
   };
+}
+
+async function resolveListingVideos(items: Item[]): Promise<Item[]> {
+  return Promise.all(
+    items.map(async (item) => {
+      if (item.mediaKind !== "video" || !isRedgifsUrl(item.url)) return item;
+      try {
+        const urls = await resolveRedgifsUrl(item.url);
+        const playback = urls ? pickRedgifsPlayback(urls) : null;
+        if (!playback) return item;
+        return {
+          ...item,
+          url: playback,
+          posterUrl: item.posterUrl ?? normalizePosterUrl(urls?.poster ?? urls?.thumbnail),
+        };
+      } catch {
+        return item;
+      }
+    }),
+  );
 }
 
 function readCache(key: string, maxAge = CACHE_TTL) {
@@ -367,7 +394,8 @@ export async function fetchRedditListing(opts: FetchListingOptions): Promise<Fet
 
   const fresh = readCache(key, CACHE_TTL);
   if (fresh) {
-    const fixed = normalizeListing(JSON.parse(fresh.body) as RedditListingResult);
+    let fixed = normalizeListing(JSON.parse(fresh.body) as RedditListingResult);
+    fixed = { ...fixed, items: await resolveListingVideos(fixed.items) };
     return { body: JSON.stringify(fixed), cache: "hit" };
   }
 
@@ -392,12 +420,14 @@ export async function fetchRedditListing(opts: FetchListingOptions): Promise<Fet
   }
 
   if (payload) {
+    payload.items = await resolveListingVideos(payload.items);
     return { body: writeCache(key, payload), cache: "miss" };
   }
 
   const stale = readCache(key, STALE_TTL);
   if (stale) {
-    const fixed = normalizeListing(JSON.parse(stale.body) as RedditListingResult);
+    let fixed = normalizeListing(JSON.parse(stale.body) as RedditListingResult);
+    fixed = { ...fixed, items: await resolveListingVideos(fixed.items) };
     return { body: JSON.stringify(fixed), cache: "stale" };
   }
 
@@ -422,7 +452,7 @@ export async function fetchRedditMix(
   sort = "top",
   imageLimit = 80,
 ): Promise<RedditListingResult & { sources: string[] }> {
-  const mixKey = `mix:${sort}:${subs.join(",")}`;
+  const mixKey = `v2:mix:${sort}:${subs.join(",")}`;
   const fresh = readCache(mixKey, CACHE_TTL);
   if (fresh) {
     const parsed = JSON.parse(fresh.body) as RedditListingResult & { sources?: string[] };

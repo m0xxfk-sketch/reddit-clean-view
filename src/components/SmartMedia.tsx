@@ -5,7 +5,6 @@ import type { MediaKind } from "@/lib/media-types";
 import { imageCandidates, withRetryParam } from "@/lib/image-fallbacks";
 import {
   isDirectVideoUrl,
-  mediaProxyUrl,
   needsVideoResolve,
   normalizePosterUrl,
   videoLoadCandidates,
@@ -161,13 +160,16 @@ export function SmartMedia({
     }
 
     if (!resolvedSrc) {
+      const posterCandidates = resolvedPoster ? imageCandidates(resolvedPoster) : [];
+      const posterSrc = posterCandidates[0];
+
       return (
         <div
           className={`relative flex items-center justify-center overflow-hidden bg-black/40 ${className ?? ""}`}
           style={width && height ? { aspectRatio: `${width} / ${height}` } : undefined}
         >
-          {resolvedPoster && (
-            <img src={resolvedPoster} alt={alt} className="h-full w-full object-cover opacity-60" />
+          {posterSrc && (
+            <img src={posterSrc} alt={alt} className="h-full w-full object-cover opacity-60" />
           )}
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="size-8 animate-spin rounded-full border-2 border-white/30 border-t-white/90" />
@@ -246,7 +248,7 @@ function VideoFallback({
   height?: number;
   onRetry: (e: React.MouseEvent) => void;
 }) {
-  const proxiedPoster = poster && !poster.startsWith("/api/") ? mediaProxyUrl(poster) : poster;
+  const proxiedPoster = poster ? imageCandidates(poster)[0] : undefined;
 
   return (
     <div

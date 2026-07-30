@@ -12,7 +12,7 @@ export type FetchArgs = {
 
 export type FetchResult = { items: RedditMedia[]; after: string | null };
 
-const CACHE_PREFIX = "peek:page:";
+const CACHE_PREFIX = "peek:page:v2:";
 const CACHE_TTL = 15 * 60 * 1000;
 const STALE_TTL = 60 * 60 * 1000;
 

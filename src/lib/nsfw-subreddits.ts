@@ -240,25 +240,65 @@ export type MixFeedOptions = {
 export async function fetchMixFeed(options: MixFeedOptions = {}): Promise<NsfwTopFeedResult> {
   const params = new URLSearchParams({
     sort: "top",
-    subLimit: String(options.subLimit ?? 6),
-    imageLimit: String(options.imageLimit ?? 80),
+    subLimit: String(options.subLimit ?? 4),
+    imageLimit: String(options.imageLimit ?? 60),
   });
   if (options.subs?.length) params.set("subs", options.subs.join(","));
   if (options.discover) params.set("discover", "1");
   if (options.excludeGenres?.length) params.set("exclude", options.excludeGenres.join(","));
+
+  const cacheKey = `peek:mix:v2:${params.toString()}`;
+  const cached = readMixCache(cacheKey);
+  if (cached) return cached;
 
   const res = await fetch(`/api/public/reddit/mix?${params}`, {
     headers: { Accept: "application/json" },
   });
 
   const json = (await res.json()) as NsfwTopFeedResult & { error?: string };
-  if (!res.ok) throw new Error(json.error ?? `Mix feed failed (${res.status}).`);
+  if (!res.ok) {
+    const stale = readMixCache(cacheKey, true);
+    if (stale?.items.length) return stale;
+    throw new Error(json.error ?? `Mix feed failed (${res.status}).`);
+  }
 
-  return {
+  const result: NsfwTopFeedResult = {
     items: json.items ?? [],
     after: json.after ?? null,
     sources: json.sources ?? [],
   };
+  writeMixCache(cacheKey, result);
+  return result;
+}
+
+const MIX_CACHE_TTL = 15 * 60 * 1000;
+const MIX_STALE_TTL = 60 * 60 * 1000;
+
+function readMixCache(key: string, allowStale = false): NsfwTopFeedResult | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { at: number; data: NsfwTopFeedResult };
+    const age = Date.now() - (parsed?.at ?? 0);
+    if (!parsed?.at || age > MIX_STALE_TTL) {
+      window.sessionStorage.removeItem(key);
+      return null;
+    }
+    if (!allowStale && age > MIX_CACHE_TTL) return null;
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+function writeMixCache(key: string, data: NsfwTopFeedResult) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify({ at: Date.now(), data }));
+  } catch {
+    // best-effort
+  }
 }
 
 /** @deprecated Use fetchMixFeed */

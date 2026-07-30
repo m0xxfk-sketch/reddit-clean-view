@@ -9,7 +9,13 @@ export function AgeGate({ children }: { children: React.ReactNode }) {
     setState(localStorage.getItem(KEY) === "1" ? "open" : "gated");
   }, []);
 
-  if (state === "loading") return <div className="min-h-screen bg-background" />;
+  if (state === "loading") {
+    return (
+      <div className="grain flex min-h-screen items-center justify-center bg-background">
+        <div className="size-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+      </div>
+    );
+  }
   if (state === "open") return <>{children}</>;
 
   return (

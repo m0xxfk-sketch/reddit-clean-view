@@ -59,7 +59,7 @@ function Viewer() {
   const [subreddit, setSubreddit] = useState("gonewild");
   const [draft, setDraft] = useState("gonewild");
   const [sort, setSort] = useState<(typeof SORTS)[number]>("top");
-  const [feedMode, setFeedMode] = useState<FeedMode>("mix");
+  const [feedMode, setFeedMode] = useState<FeedMode>("sub");
   const [customMix, setCustomMix] = useState<CustomMix | null>(null);
   const [browseMode, setBrowseMode] = useState<BrowseMode>("wall");
   const [active, setActive] = useState<number | null>(null);
@@ -84,14 +84,14 @@ function Viewer() {
       if (feedMode === "mix") {
         return pageParam
           ? Promise.resolve({ items: [], after: null, sources: [] })
-          : fetchMixFeed({ subLimit: 6, imageLimit: 80 });
+          : fetchMixFeed({ subLimit: 4, imageLimit: 60 });
       }
       if (feedMode === "discover") {
         return pageParam
           ? Promise.resolve({ items: [], after: null, sources: [] })
           : fetchMixFeed({
-              subLimit: 8,
-              imageLimit: 80,
+              subLimit: 5,
+              imageLimit: 60,
               discover: true,
               excludeGenres: getRecentGenres(),
             });
@@ -99,16 +99,18 @@ function Viewer() {
       if (feedMode === "custom" && customMix) {
         return pageParam
           ? Promise.resolve({ items: [], after: null, sources: [] })
-          : fetchMixFeed({ subs: customMix.subs, imageLimit: 80 });
+          : fetchMixFeed({ subs: customMix.subs, imageLimit: 60 });
       }
       return fetchSubredditImages({ subreddit, sort, after: pageParam });
     },
     getNextPageParam: (last) =>
       feedMode === "sub" ? last.after : undefined,
-    retry: false,
+    retry: 1,
     staleTime: 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
+    placeholderData: (prev) =>
+      prev ?? { pages: [{ items: getOfflineItems(), after: null }], pageParams: [null] },
   });
 
   const rawItems: RedditMedia[] = useMemo(() => {
@@ -307,12 +309,32 @@ function Viewer() {
           </div>
         )}
 
-        {query.isPending && <SkeletonWall />}
+        {query.isFetching && !query.isPending && (
+          <div className="mb-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" />
+            Refreshing…
+          </div>
+        )}
+
+        {query.isPending && items.length === 0 && <SkeletonWall />}
 
         {!query.isPending && !query.isError && items.length === 0 && (
-          <p className="py-24 text-center text-sm text-muted-foreground">
-            No media matches your filters. Try adjusting score or media type.
-          </p>
+          <div className="py-24 text-center">
+            <p className="text-sm text-muted-foreground">
+              {rawItems.length > 0
+                ? "No media matches your filters. Try adjusting score or media type."
+                : "Nothing loaded yet. Check your connection or pick a subreddit."}
+            </p>
+            {rawItems.length === 0 && (
+              <button
+                type="button"
+                onClick={() => query.refetch()}
+                className="mt-4 rounded-full border border-border bg-surface px-4 py-1.5 text-xs transition hover:bg-surface-raised"
+              >
+                Retry
+              </button>
+            )}
+          </div>
         )}
 
         {items.length > 0 && browseMode === "wall" && (

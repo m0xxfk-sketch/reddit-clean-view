@@ -27,15 +27,21 @@ let token: { value: string; expires: number } | null = null;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Serialize Reddit fetches so parallel mix workers don't stampede. */
+let throttleChain: Promise<void> = Promise.resolve();
+
 async function throttle() {
-  const wait = MIN_GAP_MS - (Date.now() - lastRedditFetch);
-  if (wait > 0) await sleep(wait);
-  lastRedditFetch = Date.now();
+  const run = throttleChain.then(async () => {
+    const wait = MIN_GAP_MS - (Date.now() - lastRedditFetch);
+    if (wait > 0) await sleep(wait);
+    lastRedditFetch = Date.now();
+  });
+  throttleChain = run.catch(() => {});
+  await run;
 }
 
 import { decodeHtmlEntities, normalizeImageUrl } from "@/lib/image-url";
 import { isDirectVideoUrl, isRedgifsUrl, normalizePosterUrl } from "@/lib/media-url";
-import { pickRedgifsPlayback, resolveRedgifsUrl } from "@/lib/redgifs-server";
 
 async function getToken(): Promise<string | null> {
   const id = process.env.REDDIT_CLIENT_ID;
@@ -293,26 +299,6 @@ function normalizeListing(payload: RedditListingResult): RedditListingResult {
   };
 }
 
-async function resolveListingVideos(items: Item[]): Promise<Item[]> {
-  return Promise.all(
-    items.map(async (item) => {
-      if (item.mediaKind !== "video" || !isRedgifsUrl(item.url)) return item;
-      try {
-        const urls = await resolveRedgifsUrl(item.url);
-        const playback = urls ? pickRedgifsPlayback(urls) : null;
-        if (!playback) return item;
-        return {
-          ...item,
-          url: playback,
-          posterUrl: item.posterUrl ?? normalizePosterUrl(urls?.poster ?? urls?.thumbnail),
-        };
-      } catch {
-        return item;
-      }
-    }),
-  );
-}
-
 function readCache(key: string, maxAge = CACHE_TTL) {
   const hit = cache.get(key);
   if (!hit) return null;
@@ -393,9 +379,7 @@ export async function fetchRedditListing(opts: FetchListingOptions): Promise<Fet
 
   const fresh = readCache(key, CACHE_TTL);
   if (fresh) {
-    let fixed = normalizeListing(JSON.parse(fresh.body) as RedditListingResult);
-    fixed = { ...fixed, items: await resolveListingVideos(fixed.items) };
-    return { body: JSON.stringify(fixed), cache: "hit" };
+    return { body: fresh.body, cache: "hit" };
   }
 
   let payload: RedditListingResult | null = null;
@@ -419,15 +403,12 @@ export async function fetchRedditListing(opts: FetchListingOptions): Promise<Fet
   }
 
   if (payload) {
-    payload.items = await resolveListingVideos(payload.items);
     return { body: writeCache(key, payload), cache: "miss" };
   }
 
   const stale = readCache(key, STALE_TTL);
   if (stale) {
-    let fixed = normalizeListing(JSON.parse(stale.body) as RedditListingResult);
-    fixed = { ...fixed, items: await resolveListingVideos(fixed.items) };
-    return { body: JSON.stringify(fixed), cache: "stale" };
+    return { body: stale.body, cache: "stale" };
   }
 
   if (rateLimited) {
@@ -445,7 +426,36 @@ export class ListingError extends Error {
   }
 }
 
-/** Sequential multi-sub fetch for mix feeds — one Reddit request at a time. */
+const MIX_CONCURRENCY = 3;
+
+/** Fetch subs in parallel (throttled) for mix feeds. */
+async function fetchSubsForMix(
+  subs: string[],
+  sort: string,
+): Promise<{ sub: string; items: Item[] }[]> {
+  const batches: { sub: string; items: Item[] }[] = [];
+  const queue = [...subs];
+
+  async function worker() {
+    while (queue.length) {
+      const sub = queue.shift();
+      if (!sub) return;
+      try {
+        const { body } = await fetchRedditListing({ sub, sort });
+        const parsed = JSON.parse(body) as RedditListingResult;
+        if (parsed.items.length) batches.push({ sub, items: parsed.items });
+      } catch {
+        // skip subs that fail — partial mix is better than none
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(MIX_CONCURRENCY, subs.length) }, () => worker()),
+  );
+  return batches;
+}
+
 export async function fetchRedditMix(
   subs: string[],
   sort = "top",
@@ -455,20 +465,10 @@ export async function fetchRedditMix(
   const fresh = readCache(mixKey, CACHE_TTL);
   if (fresh) {
     const parsed = JSON.parse(fresh.body) as RedditListingResult & { sources?: string[] };
-    const fixed = normalizeListing(parsed);
-    return { ...fixed, sources: parsed.sources ?? [] };
+    return { ...parsed, sources: parsed.sources ?? [] };
   }
 
-  const batches: { sub: string; items: Item[] }[] = [];
-  for (const sub of subs) {
-    try {
-      const { body } = await fetchRedditListing({ sub, sort });
-      const parsed = JSON.parse(body) as RedditListingResult;
-      if (parsed.items.length) batches.push({ sub, items: parsed.items });
-    } catch {
-      // skip subs that fail — partial mix is better than none
-    }
-  }
+  const batches = await fetchSubsForMix(subs, sort);
 
   const sources = batches.map((b) => b.sub);
   const items = batches
@@ -501,9 +501,7 @@ export async function fetchRedditUser(opts: FetchUserOptions): Promise<FetchList
   const key = userCacheKey(user, sort, after);
   const fresh = readCache(key, CACHE_TTL);
   if (fresh) {
-    let fixed = normalizeListing(JSON.parse(fresh.body) as RedditListingResult);
-    fixed = { ...fixed, items: await resolveListingVideos(fixed.items) };
-    return { body: JSON.stringify(fixed), cache: "hit" };
+    return { body: fresh.body, cache: "hit" };
   }
 
   let payload: RedditListingResult | null = null;
@@ -536,7 +534,6 @@ export async function fetchRedditUser(opts: FetchUserOptions): Promise<FetchList
   }
 
   if (payload) {
-    payload.items = await resolveListingVideos(payload.items);
     return { body: writeCache(key, payload), cache: "miss" };
   }
 

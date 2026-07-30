@@ -11,8 +11,8 @@ export const Route = createFileRoute("/api/public/reddit/mix")({
         const sort = ["hot", "new", "top", "rising"].includes(params.get("sort") ?? "")
           ? params.get("sort")!
           : "top";
-        const subLimit = Math.min(Math.max(Number(params.get("subLimit") ?? 6), 1), 10);
-        const imageLimit = Math.min(Math.max(Number(params.get("imageLimit") ?? 80), 10), 120);
+        const subLimit = Math.min(Math.max(Number(params.get("subLimit") ?? 4), 1), 8);
+        const imageLimit = Math.min(Math.max(Number(params.get("imageLimit") ?? 60), 10), 100);
         const discover = params.get("discover") === "1";
         const exclude = (params.get("exclude") ?? "")
           .split(",")

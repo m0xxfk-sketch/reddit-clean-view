@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   DEFAULT_SETTINGS,
@@ -7,30 +7,26 @@ import {
   type PremiumSettings,
 } from "@/lib/premium-store";
 
-function subscribe(cb: () => void) {
-  window.addEventListener("storage", cb);
-  window.addEventListener("peek-settings", cb);
-  return () => {
-    window.removeEventListener("storage", cb);
-    window.removeEventListener("peek-settings", cb);
-  };
-}
-
-function notify() {
-  window.dispatchEvent(new Event("peek-settings"));
-}
-
 export function usePremiumSettings() {
-  const settings = useSyncExternalStore(
-    subscribe,
-    () => getSettings(),
-    () => DEFAULT_SETTINGS,
-  );
+  const [settings, setSettings] = useState<PremiumSettings>(() => getSettings());
+
+  useEffect(() => {
+    const sync = () => setSettings(getSettings());
+    window.addEventListener("storage", sync);
+    window.addEventListener("peek-settings", sync);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("peek-settings", sync);
+    };
+  }, []);
 
   const update = useCallback((patch: Partial<PremiumSettings>) => {
     saveSettings(patch);
-    notify();
+    setSettings(getSettings());
+    window.dispatchEvent(new Event("peek-settings"));
   }, []);
 
   return { settings, update };
 }
+
+export { DEFAULT_SETTINGS };

@@ -67,21 +67,13 @@ export function PinGate({ children }: { children: React.ReactNode }) {
     setError("");
 
     try {
-      if (mode === "server") {
-        const ok = await verifyPinWithServer(pin);
-        if (!ok) {
-          fail("Wrong PIN. Try again.");
-          return;
-        }
-        unlock();
-        return;
-      }
-
       const ok = await verifyLocalPin(pin);
       if (!ok) {
         fail("Wrong PIN. Try again.");
         return;
       }
+      // Best-effort server session when PEEK_PIN is configured in deployment secrets.
+      await verifyPinWithServer(pin).catch(() => {});
       unlockLocally(remember);
       unlock();
     } finally {

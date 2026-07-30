@@ -84,7 +84,7 @@ export async function isRequestAuthenticated(request: Request): Promise<boolean>
   return verifyAuthToken(token);
 }
 
-/** Returns a 401 response when server PIN is enabled and the request is not authenticated. */
+/** Returns a 401 when PEEK_PIN is set and no valid auth cookie is present. */
 export async function requirePinAuth(request: Request): Promise<Response | null> {
   if (!isServerPinEnabled()) return null;
   if (await isRequestAuthenticated(request)) return null;

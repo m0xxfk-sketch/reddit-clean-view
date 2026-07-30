@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import {
   Sheet,
   SheetContent,
@@ -5,20 +7,28 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { getFavorites } from "@/lib/premium-store";
-import { useSyncExternalStore } from "react";
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
-function subscribe(cb: () => void) {
-  window.addEventListener("storage", cb);
-  return () => window.removeEventListener("storage", cb);
-}
-
 export function FavoritesPanel({ open, onOpenChange }: Props) {
-  const favorites = useSyncExternalStore(subscribe, () => getFavorites(), () => []);
+  const [favorites, setFavorites] = useState(() => getFavorites());
+
+  useEffect(() => {
+    const sync = () => setFavorites(getFavorites());
+    window.addEventListener("storage", sync);
+    window.addEventListener("peek-favorites", sync);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("peek-favorites", sync);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (open) setFavorites(getFavorites());
+  }, [open]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

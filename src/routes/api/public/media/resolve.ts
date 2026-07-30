@@ -2,14 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { pickRedgifsPlayback, resolveRedgifsUrl } from "@/lib/redgifs-server";
 import { isDirectVideoUrl, isRedgifsUrl } from "@/lib/media-url";
-import { requirePinAuth } from "@/lib/pin-auth-server";
 
 export const Route = createFileRoute("/api/public/media/resolve")({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const denied = await requirePinAuth(request);
-        if (denied) return denied;
         const params = new URL(request.url).searchParams;
         const raw = params.get("url") ?? "";
         const quality = params.get("quality") === "sd" ? "sd" : "hd";

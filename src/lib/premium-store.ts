@@ -63,12 +63,27 @@ function write(key: string, value: unknown) {
   }
 }
 
+let settingsCache: PremiumSettings | null = null;
+let settingsCacheKey: string | null = null;
+
+function settingsStorageKey(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(SETTINGS_KEY);
+}
+
 export function getSettings(): PremiumSettings {
-  return { ...DEFAULT_SETTINGS, ...read<Partial<PremiumSettings>>(SETTINGS_KEY, {}) };
+  const raw = settingsStorageKey();
+  if (settingsCache && raw === settingsCacheKey) return settingsCache;
+  settingsCacheKey = raw;
+  settingsCache = { ...DEFAULT_SETTINGS, ...read<Partial<PremiumSettings>>(SETTINGS_KEY, {}) };
+  return settingsCache;
 }
 
 export function saveSettings(patch: Partial<PremiumSettings>) {
-  write(SETTINGS_KEY, { ...getSettings(), ...patch });
+  const next = { ...getSettings(), ...patch };
+  write(SETTINGS_KEY, next);
+  settingsCache = next;
+  settingsCacheKey = settingsStorageKey();
 }
 
 export function getFavorites(): RedditMedia[] {
@@ -85,9 +100,11 @@ export function toggleFavorite(item: RedditMedia): boolean {
   if (i >= 0) {
     list.splice(i, 1);
     write(FAVORITES_KEY, list);
+    window.dispatchEvent(new Event("peek-favorites"));
     return false;
   }
   write(FAVORITES_KEY, [item, ...list].slice(0, 500));
+  window.dispatchEvent(new Event("peek-favorites"));
   return true;
 }
 

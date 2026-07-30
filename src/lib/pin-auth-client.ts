@@ -57,17 +57,12 @@ export type PinAuthStatus = {
 };
 
 export async function fetchPinStatus(): Promise<PinAuthStatus> {
-  try {
-    const res = await fetch("/api/public/auth/status", { credentials: "include" });
-    if (!res.ok) throw new Error("status failed");
-    return (await res.json()) as PinAuthStatus;
-  } catch {
-    return {
-      mode: "client",
-      unlocked: isLocallyUnlocked(),
-      configured: hasLocalPin(),
-    };
-  }
+  // UI lock always uses the locally configured PIN.
+  return {
+    mode: "client",
+    unlocked: isLocallyUnlocked(),
+    configured: hasLocalPin(),
+  };
 }
 
 export async function verifyPinWithServer(pin: string): Promise<boolean> {

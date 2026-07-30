@@ -109,8 +109,6 @@ function Viewer() {
     staleTime: 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
-    placeholderData: (prev) =>
-      prev ?? { pages: [{ items: getOfflineItems(), after: null }], pageParams: [null] },
   });
 
   const rawItems: RedditMedia[] = useMemo(() => {

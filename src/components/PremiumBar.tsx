@@ -1,4 +1,6 @@
 import {
+  Blend,
+  Bookmark,
   Compass,
   Dices,
   EyeOff,
@@ -7,6 +9,8 @@ import {
   Keyboard,
   Layers,
   Lock,
+  RectangleHorizontal,
+  ScanEye,
   Shuffle,
   SlidersHorizontal,
   Sparkles,
@@ -19,8 +23,11 @@ import { useEffect, useState } from "react";
 
 import { CustomMixDialog } from "@/components/CustomMixDialog";
 import { FavoritesPanel } from "@/components/FavoritesPanel";
+import { GenreMixDialog } from "@/components/GenreMixDialog";
+import { GenreRouletteDialog } from "@/components/GenreRouletteDialog";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { ShortcutsDialog } from "@/components/ShortcutsDialog";
+import { WatchlistPanel } from "@/components/WatchlistPanel";
 import {
   Select,
   SelectContent,
@@ -32,10 +39,12 @@ import { usePremiumSettings } from "@/hooks/use-premium-settings";
 import type { CustomMix } from "@/lib/premium-store";
 import { lockApp } from "@/lib/pin-auth-client";
 import { playTick } from "@/lib/sounds";
+import type { NsfwCategory } from "@/lib/nsfw-subreddits";
 
 type Props = {
   onDiscover: () => void;
   onCustomMix: (mix: CustomMix) => void;
+  onGenreMix: (genre: NsfwCategory, subs: string[]) => void;
   onShowFavorites: () => void;
   onPickSub: (name: string) => void;
   onSurprise: () => void;
@@ -45,6 +54,7 @@ type Props = {
 export function PremiumBar({
   onDiscover,
   onCustomMix,
+  onGenreMix,
   onShowFavorites,
   onPickSub,
   onSurprise,
@@ -52,6 +62,9 @@ export function PremiumBar({
 }: Props) {
   const { settings, update } = usePremiumSettings();
   const [mixOpen, setMixOpen] = useState(false);
+  const [genreMixOpen, setGenreMixOpen] = useState(false);
+  const [rouletteOpen, setRouletteOpen] = useState(false);
+  const [watchlistOpen, setWatchlistOpen] = useState(false);
   const [favOpen, setFavOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -108,6 +121,42 @@ export function PremiumBar({
         >
           <Dices className="size-3.5" />
           Surprise me
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setRouletteOpen(true);
+            tick();
+          }}
+          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-muted-foreground transition hover:text-foreground"
+        >
+          <Dices className="size-3.5 rotate-45" />
+          Roulette
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setGenreMixOpen(true);
+            tick();
+          }}
+          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-muted-foreground transition hover:text-foreground"
+        >
+          <Blend className="size-3.5" />
+          Genre mix
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setWatchlistOpen(true);
+            tick();
+          }}
+          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-muted-foreground transition hover:text-foreground"
+        >
+          <Bookmark className="size-3.5" />
+          Watchlist
         </button>
 
         <button
@@ -199,6 +248,24 @@ export function PremiumBar({
           </SelectContent>
         </Select>
 
+        <Select
+          value={settings.orientationFilter}
+          onValueChange={(v) =>
+            update({ orientationFilter: v as typeof settings.orientationFilter })
+          }
+        >
+          <SelectTrigger className="h-8 w-[108px] rounded-full border-border bg-surface text-xs">
+            <RectangleHorizontal className="mr-1 size-3" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Any ratio</SelectItem>
+            <SelectItem value="portrait">Portrait</SelectItem>
+            <SelectItem value="landscape">Landscape</SelectItem>
+            <SelectItem value="square">Square</SelectItem>
+          </SelectContent>
+        </Select>
+
         <button
           type="button"
           aria-pressed={settings.shuffle}
@@ -215,6 +282,24 @@ export function PremiumBar({
         >
           <Shuffle className="size-3.5" />
           Shuffle
+        </button>
+
+        <button
+          type="button"
+          aria-pressed={settings.discreetBlur}
+          onClick={() => {
+            update({ discreetBlur: !settings.discreetBlur });
+            tick();
+          }}
+          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 transition ${
+            settings.discreetBlur
+              ? "border-primary/50 bg-primary/10 text-primary"
+              : "border-border text-muted-foreground hover:text-foreground"
+          }`}
+          title="Blur thumbnails until hover"
+        >
+          <ScanEye className="size-3.5" />
+          Discreet
         </button>
 
         <button
@@ -308,6 +393,21 @@ export function PremiumBar({
       </div>
 
       <CustomMixDialog open={mixOpen} onOpenChange={setMixOpen} onSave={onCustomMix} />
+      <GenreMixDialog
+        open={genreMixOpen}
+        onOpenChange={setGenreMixOpen}
+        onPickGenreMix={onGenreMix}
+      />
+      <GenreRouletteDialog
+        open={rouletteOpen}
+        onOpenChange={setRouletteOpen}
+        onPickSub={onPickSub}
+      />
+      <WatchlistPanel
+        open={watchlistOpen}
+        onOpenChange={setWatchlistOpen}
+        onPickSub={onPickSub}
+      />
       <FavoritesPanel open={favOpen} onOpenChange={setFavOpen} />
       <HistoryPanel open={historyOpen} onOpenChange={setHistoryOpen} onPickSub={onPickSub} />
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />

@@ -3,12 +3,14 @@ import type { RedditMedia } from "@/lib/media-types";
 export type VideoQuality = "hd" | "sd";
 export type MediaFilter = "all" | "image" | "video";
 export type TimeFilter = "all" | "day" | "week" | "month";
+export type OrientationFilter = "all" | "portrait" | "landscape" | "square";
 
 export type PremiumSettings = {
   videoQuality: VideoQuality;
   mediaFilter: MediaFilter;
   minScore: number;
   timeFilter: TimeFilter;
+  orientationFilter: OrientationFilter;
   immersive: boolean;
   sounds: boolean;
   prefetchCount: number;
@@ -16,6 +18,12 @@ export type PremiumSettings = {
   hideSeen: boolean;
   feedAutoplay: boolean;
   feedAutoplaySec: number;
+  discreetBlur: boolean;
+};
+
+export type WatchlistEntry = {
+  sub: string;
+  added: number;
 };
 
 export type CustomMix = {
@@ -38,12 +46,14 @@ const HISTORY_KEY = "peek:premium:history";
 const OFFLINE_KEY = "peek:premium:offline";
 const RECENT_GENRES_KEY = "peek:premium:genres";
 const SEEN_KEY = "peek:premium:seen";
+const WATCHLIST_KEY = "peek:premium:watchlist";
 
 export const DEFAULT_SETTINGS: PremiumSettings = {
   videoQuality: "sd",
   mediaFilter: "all",
   minScore: 0,
   timeFilter: "all",
+  orientationFilter: "all",
   immersive: false,
   sounds: true,
   prefetchCount: 3,
@@ -51,6 +61,7 @@ export const DEFAULT_SETTINGS: PremiumSettings = {
   hideSeen: false,
   feedAutoplay: false,
   feedAutoplaySec: 6,
+  discreetBlur: false,
 };
 
 function read<T>(key: string, fallback: T): T {
@@ -209,4 +220,40 @@ export function getRecentSubs(limit = 8): string[] {
     if (out.length >= limit) break;
   }
   return out;
+}
+
+export function getWatchlist(): WatchlistEntry[] {
+  return read<WatchlistEntry[]>(WATCHLIST_KEY, []);
+}
+
+export function isOnWatchlist(sub: string): boolean {
+  const key = sub.toLowerCase();
+  return getWatchlist().some((e) => e.sub.toLowerCase() === key);
+}
+
+export function addToWatchlist(sub: string) {
+  const clean = sub.trim().replace(/^\/?r\//i, "");
+  if (!clean) return;
+  const key = clean.toLowerCase();
+  const list = getWatchlist().filter((e) => e.sub.toLowerCase() !== key);
+  write(WATCHLIST_KEY, [{ sub: clean, added: Date.now() }, ...list].slice(0, 50));
+  window.dispatchEvent(new Event("peek-watchlist"));
+}
+
+export function removeFromWatchlist(sub: string) {
+  const key = sub.toLowerCase();
+  write(
+    WATCHLIST_KEY,
+    getWatchlist().filter((e) => e.sub.toLowerCase() !== key),
+  );
+  window.dispatchEvent(new Event("peek-watchlist"));
+}
+
+export function toggleWatchlist(sub: string): boolean {
+  if (isOnWatchlist(sub)) {
+    removeFromWatchlist(sub);
+    return false;
+  }
+  addToWatchlist(sub);
+  return true;
 }

@@ -27,6 +27,7 @@ type Props = {
   videoQuality?: VideoQuality;
   sounds?: boolean;
   showPip?: boolean;
+  discreetBlur?: boolean;
 };
 
 export function MediaCard({
@@ -40,8 +41,10 @@ export function MediaCard({
   videoQuality = "sd",
   sounds = true,
   showPip = false,
+  discreetBlur = false,
 }: Props) {
   const [fav, setFav] = useState(() => isFavorite(item.id));
+  const [revealed, setRevealed] = useState(!discreetBlur);
   const videoRef = useRef<SmartMediaHandle>(null);
 
   const overlayClass =
@@ -52,10 +55,17 @@ export function MediaCard({
         : "translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100";
 
   return (
-    <div className={`group relative ${className ?? ""}`}>
+    <div
+      className={`group relative ${className ?? ""}`}
+      onMouseEnter={() => discreetBlur && setRevealed(true)}
+      onFocus={() => discreetBlur && setRevealed(true)}
+    >
       <button
         type="button"
-        onClick={() => onOpen(index)}
+        onClick={() => {
+          if (discreetBlur) setRevealed(true);
+          onOpen(index);
+        }}
         className="block w-full text-left"
         aria-label={item.title}
       >
@@ -69,7 +79,7 @@ export function MediaCard({
           videoQuality={videoQuality}
           width={item.width}
           height={item.height}
-          className={mediaClassName}
+          className={`transition-[filter] duration-300 ${discreetBlur && !revealed ? "blur-2xl scale-105" : ""} ${mediaClassName ?? ""}`}
         />
       </button>
 

@@ -346,7 +346,7 @@ export const NSFW_GENRE_LABELS: Record<NsfwCategory, string> = {
   alt: "Alt & Niche",
 };
 
-const GENRE_ORDER: NsfwCategory[] = [
+export const GENRE_ORDER: NsfwCategory[] = [
   "general",
   "amateur",
   "body-type",

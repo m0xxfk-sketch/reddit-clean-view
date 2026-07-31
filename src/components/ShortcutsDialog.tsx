@@ -21,6 +21,7 @@ const SHORTCUTS = [
   { keys: ["Space"], desc: "Slideshow in focus viewer" },
   { keys: ["F"], desc: "Toggle fit/fill in focus viewer" },
   { keys: ["Scroll"], desc: "Auto-load more posts near bottom" },
+  { keys: ["Toolbar"], desc: "Roulette, genre mix, watchlist, discreet blur" },
 ];
 
 export function ShortcutsDialog({ open, onOpenChange }: Props) {

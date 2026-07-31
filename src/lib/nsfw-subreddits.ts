@@ -426,7 +426,7 @@ export type MixFeedOptions = {
 export async function fetchMixFeed(options: MixFeedOptions = {}): Promise<NsfwTopFeedResult> {
   const params = new URLSearchParams({
     sort: "top",
-    subLimit: String(options.subLimit ?? 4),
+    subLimit: String(options.subLimit ?? 3),
     imageLimit: String(options.imageLimit ?? 60),
   });
   if (options.subs?.length) params.set("subs", options.subs.join(","));
@@ -435,27 +435,52 @@ export async function fetchMixFeed(options: MixFeedOptions = {}): Promise<NsfwTo
 
   const cacheKey = `peek:mix:v2:${params.toString()}`;
   const cached = readMixCache(cacheKey);
-  if (cached) return cached;
+  if (cached?.items.length) return cached;
 
-  const res = await fetch(`/api/public/reddit/mix?${params}`, {
-    headers: { Accept: "application/json" },
-    credentials: "include",
-  });
+  let lastError = new Error("Mix feed failed.");
 
-  const json = (await res.json()) as NsfwTopFeedResult & { error?: string };
-  if (!res.ok) {
-    const stale = readMixCache(cacheKey, true);
-    if (stale?.items.length) return stale;
-    throw new Error(json.error ?? `Mix feed failed (${res.status}).`);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await sleep(1000 * 2 ** (attempt - 1) + Math.random() * 400);
+
+    let res: Response;
+    try {
+      res = await fetch(`/api/public/reddit/mix?${params}`, {
+        headers: { Accept: "application/json" },
+        credentials: "include",
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch (err) {
+      lastError =
+        err instanceof DOMException && err.name === "TimeoutError"
+          ? new Error("Mix feed timed out. Try again.")
+          : new Error("Network error while loading mix feed.");
+      continue;
+    }
+
+    const json = (await res.json()) as NsfwTopFeedResult & { error?: string };
+    if (!res.ok) {
+      lastError = new Error(json.error ?? `Mix feed failed (${res.status}).`);
+      if (res.status === 429 || res.status === 502) continue;
+      break;
+    }
+
+    const result: NsfwTopFeedResult = {
+      items: json.items ?? [],
+      after: json.after ?? null,
+      sources: json.sources ?? [],
+    };
+    if (!result.items.length) {
+      lastError = new Error("Mix feed returned no media right now.");
+      continue;
+    }
+    writeMixCache(cacheKey, result);
+    return result;
   }
 
-  const result: NsfwTopFeedResult = {
-    items: json.items ?? [],
-    after: json.after ?? null,
-    sources: json.sources ?? [],
-  };
-  writeMixCache(cacheKey, result);
-  return result;
+  const stale = readMixCache(cacheKey, true);
+  if (stale?.items.length) return stale;
+
+  throw lastError;
 }
 
 const MIX_CACHE_TTL = 15 * 60 * 1000;

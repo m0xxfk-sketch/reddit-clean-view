@@ -21,7 +21,7 @@ type Props = {
 
 export function GenreMixDialog({ open, onOpenChange, onPickGenreMix }: Props) {
   const pick = (genre: NsfwCategory) => {
-    const subs = getNsfwTopSubreddits({ category: genre, limit: 5 }).map((s) => s.name);
+    const subs = getNsfwTopSubreddits({ category: genre, limit: 3 }).map((s) => s.name);
     if (!subs.length) return;
     onPickGenreMix(genre, subs);
     onOpenChange(false);

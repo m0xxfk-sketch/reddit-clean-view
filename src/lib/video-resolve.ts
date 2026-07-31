@@ -2,7 +2,7 @@ type ResolveResult = { url: string; poster?: string | null };
 
 const CACHE_PREFIX = "peek:resolve:v1:";
 const CACHE_TTL = 24 * 60 * 60 * 1000;
-const MAX_CONCURRENT = 4;
+const MAX_CONCURRENT = 6;
 
 const memory = new Map<string, ResolveResult>();
 const inflight = new Map<string, Promise<ResolveResult | null>>();

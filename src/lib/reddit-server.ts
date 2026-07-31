@@ -19,7 +19,8 @@ export type RedditListingResult = { items: Item[]; after: string | null };
 const UA = "web:peek-image-viewer:v1 (by /u/peek)";
 const CACHE_TTL = 15 * 60 * 1000;
 const STALE_TTL = 60 * 60 * 1000;
-const MIN_GAP_MS = 900;
+const RSS_MIN_GAP_MS = 900;
+const OAUTH_MIN_GAP_MS = 450;
 
 const cache = new Map<string, { at: number; body: string }>();
 let lastRedditFetch = 0;
@@ -27,12 +28,20 @@ let token: { value: string; expires: number } | null = null;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+function hasOAuthCredentials() {
+  return Boolean(process.env.REDDIT_CLIENT_ID && process.env.REDDIT_CLIENT_SECRET);
+}
+
+function minGapMs() {
+  return hasOAuthCredentials() ? OAUTH_MIN_GAP_MS : RSS_MIN_GAP_MS;
+}
+
 /** Serialize Reddit fetches so parallel mix workers don't stampede. */
 let throttleChain: Promise<void> = Promise.resolve();
 
 async function throttle() {
   const run = throttleChain.then(async () => {
-    const wait = MIN_GAP_MS - (Date.now() - lastRedditFetch);
+    const wait = minGapMs() - (Date.now() - lastRedditFetch);
     if (wait > 0) await sleep(wait);
     lastRedditFetch = Date.now();
   });
@@ -251,7 +260,7 @@ function parseRss(xml: string, sub: string): RedditListingResult {
         width,
         height,
         isGallery: false,
-        score: 0,
+        score: 1,
         created: Date.parse(/<published>([^<]+)<\/published>/.exec(entry)?.[1] ?? "") / 1000 || 0,
       });
       continue;
@@ -272,7 +281,7 @@ function parseRss(xml: string, sub: string): RedditListingResult {
       width,
       height,
       isGallery: false,
-      score: 0,
+      score: 1,
       created: Date.parse(/<published>([^<]+)<\/published>/.exec(entry)?.[1] ?? "") / 1000 || 0,
     });
   }
@@ -315,6 +324,10 @@ function writeCache(key: string, payload: RedditListingResult) {
   return body;
 }
 
+function listingHasItems(payload: RedditListingResult | null): payload is RedditListingResult {
+  return Boolean(payload?.items.length);
+}
+
 async function fetchRss(sub: string, sort: string, after: string): Promise<Response> {
   const qs = new URLSearchParams({ limit: "25" });
   if (sort === "top") qs.set("t", "week");
@@ -355,13 +368,22 @@ async function fetchOAuth(
     qs.set("count", "50");
   }
 
-  await throttle();
-  const res = await fetch(`https://oauth.reddit.com/r/${sub}/${sort}?${qs}`, {
-    headers: { Authorization: `Bearer ${accessToken}`, "User-Agent": UA },
-    signal: AbortSignal.timeout(12_000),
-  });
-  if (!res.ok) return null;
-  return parseJsonListing(await res.json(), sub);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await sleep(800 * 2 ** attempt + Math.random() * 300);
+
+    await throttle();
+    const res = await fetch(`https://oauth.reddit.com/r/${sub}/${sort}?${qs}`, {
+      headers: { Authorization: `Bearer ${accessToken}`, "User-Agent": UA },
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (res.status === 429 || res.status >= 500) continue;
+    if (!res.ok) return null;
+
+    const parsed = parseJsonListing(await res.json(), sub);
+    return parsed.items.length ? parsed : null;
+  }
+
+  return null;
 }
 
 export type FetchListingOptions = {
@@ -404,7 +426,7 @@ export async function fetchRedditListing(opts: FetchListingOptions): Promise<Fet
     }
   }
 
-  if (payload) {
+  if (listingHasItems(payload)) {
     return { body: writeCache(key, payload), cache: "miss" };
   }
 
@@ -428,33 +450,29 @@ export class ListingError extends Error {
   }
 }
 
-const MIX_CONCURRENCY = 3;
-
-/** Fetch subs in parallel (throttled) for mix feeds. */
+/** Fetch subs for mix feeds — stop early once enough items are collected. */
 async function fetchSubsForMix(
   subs: string[],
   sort: string,
+  imageLimit: number,
 ): Promise<{ sub: string; items: Item[] }[]> {
   const batches: { sub: string; items: Item[] }[] = [];
-  const queue = [...subs];
+  let collected = 0;
 
-  async function worker() {
-    while (queue.length) {
-      const sub = queue.shift();
-      if (!sub) return;
-      try {
-        const { body } = await fetchRedditListing({ sub, sort });
-        const parsed = JSON.parse(body) as RedditListingResult;
-        if (parsed.items.length) batches.push({ sub, items: parsed.items });
-      } catch {
-        // skip subs that fail — partial mix is better than none
+  for (const sub of subs) {
+    if (collected >= imageLimit) break;
+    try {
+      const { body } = await fetchRedditListing({ sub, sort });
+      const parsed = JSON.parse(body) as RedditListingResult;
+      if (parsed.items.length) {
+        batches.push({ sub, items: parsed.items });
+        collected += parsed.items.length;
       }
+    } catch {
+      // skip subs that fail — partial mix is better than none
     }
   }
 
-  await Promise.all(
-    Array.from({ length: Math.min(MIX_CONCURRENCY, subs.length) }, () => worker()),
-  );
   return batches;
 }
 
@@ -470,13 +488,24 @@ export async function fetchRedditMix(
     return { ...parsed, sources: parsed.sources ?? [] };
   }
 
-  const batches = await fetchSubsForMix(subs, sort);
+  const batches = await fetchSubsForMix(subs, sort, imageLimit);
 
   const sources = batches.map((b) => b.sub);
   const items = batches
     .flatMap((b) => b.items)
     .sort((a, b) => b.score - a.score)
     .slice(0, imageLimit);
+
+  if (!items.length) {
+    const stale = readCache(mixKey, STALE_TTL);
+    if (stale) {
+      const parsed = JSON.parse(stale.body) as RedditListingResult & { sources?: string[] };
+      if (parsed.items.length) {
+        return { ...parsed, sources: parsed.sources ?? [] };
+      }
+    }
+    throw new ListingError("Couldn't build the mix feed. Reddit may be rate limiting.", 502);
+  }
 
   const result = { items, after: null as string | null, sources };
   cache.set(mixKey, { at: Date.now(), body: JSON.stringify(result) });
@@ -520,7 +549,10 @@ export async function fetchRedditUser(opts: FetchUserOptions): Promise<FetchList
       headers: { Authorization: `Bearer ${accessToken}`, "User-Agent": UA },
       signal: AbortSignal.timeout(12_000),
     });
-    if (res.ok) payload = parseJsonListing(await res.json(), user);
+    if (res.ok) {
+      const parsed = parseJsonListing(await res.json(), user);
+      if (parsed.items.length) payload = parsed;
+    }
   }
 
   if (!payload) {
@@ -535,7 +567,7 @@ export async function fetchRedditUser(opts: FetchUserOptions): Promise<FetchList
     }
   }
 
-  if (payload) {
+  if (listingHasItems(payload)) {
     return { body: writeCache(key, payload), cache: "miss" };
   }
 

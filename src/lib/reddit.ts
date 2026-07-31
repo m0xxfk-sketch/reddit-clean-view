@@ -17,6 +17,7 @@ export type FetchResult = { items: RedditMedia[]; after: string | null };
 const CACHE_PREFIX = "peek:page:v2:";
 const CACHE_TTL = 15 * 60 * 1000;
 const STALE_TTL = 60 * 60 * 1000;
+const FETCH_TIMEOUT_MS = 25_000;
 
 function cacheKey(sub: string, sort: Sort, after?: string | null) {
   return `${CACHE_PREFIX}${sub.toLowerCase()}:${sort}:${after ?? "start"}`;
@@ -62,7 +63,7 @@ export async function fetchSubredditImages(data: FetchArgs): Promise<FetchResult
   const key = cacheKey(sub, data.sort, data.after);
   if (!data.fresh) {
     const cached = readCache(key);
-    if (cached) return cached;
+    if (cached?.items.length) return cached;
   }
 
   const params = new URLSearchParams({ subreddit: sub, sort: data.sort });
@@ -78,9 +79,13 @@ export async function fetchSubredditImages(data: FetchArgs): Promise<FetchResult
       res = await fetch(`/api/public/reddit?${params.toString()}`, {
         headers: { Accept: "application/json" },
         credentials: "include",
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
-    } catch {
-      lastError = new Error("Network error. Check your connection and try again.");
+    } catch (err) {
+      lastError =
+        err instanceof DOMException && err.name === "TimeoutError"
+          ? new Error("Request timed out. Try again.")
+          : new Error("Network error. Check your connection and try again.");
       continue;
     }
 
@@ -107,6 +112,10 @@ export async function fetchSubredditImages(data: FetchArgs): Promise<FetchResult
       items: json.items ?? [],
       after: json.after ?? null,
     };
+    if (!result.items.length) {
+      lastError = new Error("No media returned for this subreddit right now.");
+      continue;
+    }
     writeCache(key, result);
     return result;
   }

@@ -39,7 +39,11 @@ export const Route = createFileRoute("/api/public/reddit/mix")({
         try {
           const result = await fetchRedditMix(subs, sort, imageLimit);
           return Response.json(result, {
-            headers: { "content-type": "application/json", "x-cache": discover ? "discover" : "miss" },
+            headers: {
+              "content-type": "application/json",
+              "x-cache": discover ? "discover" : "miss",
+              "cache-control": "public, max-age=60, stale-while-revalidate=600",
+            },
           });
         } catch (err) {
           if (err instanceof ListingError) {

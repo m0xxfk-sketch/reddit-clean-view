@@ -101,13 +101,13 @@ function Viewer() {
       if (feedMode === "mix") {
         return pageParam
           ? Promise.resolve({ items: [], after: null, sources: [] })
-          : fetchMixFeed({ subLimit: 4, imageLimit: 60 });
+          : fetchMixFeed({ subLimit: 2, imageLimit: 60 });
       }
       if (feedMode === "discover") {
         return pageParam
           ? Promise.resolve({ items: [], after: null, sources: [] })
           : fetchMixFeed({
-              subLimit: 5,
+              subLimit: 3,
               imageLimit: 60,
               discover: true,
               excludeGenres: getRecentGenres(),
@@ -116,14 +116,14 @@ function Viewer() {
       if (feedMode === "custom" && customMix) {
         return pageParam
           ? Promise.resolve({ items: [], after: null, sources: [] })
-          : fetchMixFeed({ subs: customMix.subs, imageLimit: 60 });
+          : fetchMixFeed({ subs: customMix.subs.slice(0, 4), imageLimit: 60 });
       }
-      return fetchSubredditImages({ subreddit, sort, after: pageParam, fresh: !pageParam });
+      return fetchSubredditImages({ subreddit, sort, after: pageParam });
     },
     getNextPageParam: (last) =>
       feedMode === "sub" ? last.after : undefined,
-    retry: 1,
-    staleTime: feedMode === "sub" ? 0 : 10 * 60 * 1000,
+    retry: 2,
+    staleTime: feedMode === "sub" ? 3 * 60 * 1000 : 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
   });

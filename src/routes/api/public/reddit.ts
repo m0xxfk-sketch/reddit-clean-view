@@ -17,7 +17,14 @@ export const Route = createFileRoute("/api/public/reddit")({
         try {
           const { body, cache } = await fetchRedditListing({ sub, sort, after });
           return new Response(body, {
-            headers: { "content-type": "application/json", "x-cache": cache },
+            headers: {
+              "content-type": "application/json",
+              "x-cache": cache,
+              "cache-control":
+                cache === "hit"
+                  ? "public, max-age=300, stale-while-revalidate=900"
+                  : "public, max-age=60, stale-while-revalidate=600",
+            },
           });
         } catch (err) {
           if (err instanceof ListingError) {

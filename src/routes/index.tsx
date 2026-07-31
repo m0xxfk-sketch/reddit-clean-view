@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { Search, Loader2, LayoutGrid, Rows3, Monitor } from "lucide-react";
+import { Bookmark, Search, Loader2, LayoutGrid, Rows3, Monitor } from "lucide-react";
 
 import { FeedPanel } from "@/components/FeedPanel";
 import { FocusViewer } from "@/components/FocusViewer";
@@ -15,15 +15,18 @@ import { useAutoLoadMore } from "@/hooks/use-auto-load-more";
 import { usePremiumSettings } from "@/hooks/use-premium-settings";
 import { applyDisplayFilters } from "@/lib/feed-display";
 import { filterMedia } from "@/lib/feed-filters";
-import { fetchMixFeed, NSFW_TOP_SUBREDDITS } from "@/lib/nsfw-subreddits";
+import { fetchMixFeed, NSFW_GENRE_LABELS, NSFW_TOP_SUBREDDITS } from "@/lib/nsfw-subreddits";
+import type { NsfwCategory } from "@/lib/nsfw-subreddits";
 import { fetchSubredditImages, type RedditMedia } from "@/lib/reddit";
 import {
   cacheOfflineItems,
   getFavorites,
   getOfflineItems,
   getRecentGenres,
+  isOnWatchlist,
   markSeen,
   recordBrowse,
+  toggleWatchlist,
   type CustomMix,
 } from "@/lib/premium-store";
 import { playTick } from "@/lib/sounds";
@@ -69,6 +72,7 @@ function Viewer() {
   const [active, setActive] = useState<number | null>(null);
   const [feedIndex, setFeedIndex] = useState(0);
   const [headerHidden, setHeaderHidden] = useState(false);
+  const [watchlisted, setWatchlisted] = useState(() => isOnWatchlist("gonewild"));
 
   const feedId = useMemo(() => {
     if (feedMode === "favorites") return "favorites";
@@ -139,8 +143,15 @@ function Viewer() {
         mediaFilter: settings.mediaFilter,
         minScore: settings.minScore,
         timeFilter: settings.timeFilter,
+        orientationFilter: settings.orientationFilter,
       }),
-    [rawItems, settings.mediaFilter, settings.minScore, settings.timeFilter],
+    [
+      rawItems,
+      settings.mediaFilter,
+      settings.minScore,
+      settings.timeFilter,
+      settings.orientationFilter,
+    ],
   );
 
   const displayItems = useMemo(
@@ -185,6 +196,16 @@ function Viewer() {
   useEffect(() => {
     if (rawItems.length) cacheOfflineItems(rawItems);
   }, [rawItems]);
+
+  useEffect(() => {
+    const sync = () => setWatchlisted(isOnWatchlist(subreddit));
+    window.addEventListener("peek-watchlist", sync);
+    return () => window.removeEventListener("peek-watchlist", sync);
+  }, [subreddit]);
+
+  useEffect(() => {
+    setWatchlisted(isOnWatchlist(subreddit));
+  }, [subreddit]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("feed-scroll", browseMode === "feed");
@@ -284,6 +305,19 @@ function Viewer() {
     if (pick) pickSub(pick.name, true);
   };
 
+  const loadGenreMix = (genre: NsfwCategory, subs: string[]) => {
+    const mix: CustomMix = {
+      id: `genre-${genre}`,
+      name: `${NSFW_GENRE_LABELS[genre]} mix`,
+      subs,
+      created: Date.now(),
+    };
+    setCustomMix(mix);
+    setFeedMode("custom");
+    query.refetch();
+    playTick(settings.sounds);
+  };
+
   const openViewer = (index: number) => {
     const item = displayItems[index];
     if (item) markSeen(item.id);
@@ -314,8 +348,24 @@ function Viewer() {
               onChange={(e) => setDraft(e.target.value)}
               placeholder="subreddit name…"
               aria-label="Subreddit"
-              className="h-11 w-full rounded-full border border-input bg-surface pl-11 pr-4 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/60 focus:ring-2 focus:ring-primary/20"
+              className="h-11 w-full rounded-full border border-input bg-surface pl-11 pr-11 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/60 focus:ring-2 focus:ring-primary/20"
             />
+            {feedMode === "sub" && draft.trim() && (
+              <button
+                type="button"
+                aria-label={watchlisted ? "Remove from watchlist" : "Add to watchlist"}
+                title={watchlisted ? "Remove from watchlist" : "Save to watchlist"}
+                onClick={() => {
+                  setWatchlisted(toggleWatchlist(subreddit));
+                  playTick(settings.sounds);
+                }}
+                className={`absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1.5 transition ${
+                  watchlisted ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Bookmark className={`size-4 ${watchlisted ? "fill-primary" : ""}`} />
+              </button>
+            )}
           </form>
 
           <div className="browse-modes flex items-center gap-1 rounded-full border border-border bg-surface p-1">
@@ -400,6 +450,7 @@ function Viewer() {
               setFeedMode("custom");
               query.refetch();
             }}
+            onGenreMix={loadGenreMix}
             onShowFavorites={() => setFeedMode("favorites")}
             onPickSub={(name) => pickSub(name, true)}
             onSurprise={surpriseSub}
@@ -463,6 +514,7 @@ function Viewer() {
                 videoQuality={settings.videoQuality}
                 sounds={settings.sounds}
                 showPip
+                discreetBlur={settings.discreetBlur}
                 className="break-inside-avoid overflow-hidden rounded-xl border border-border bg-surface"
                 mediaClassName="w-full transition duration-500 group-hover:scale-[1.03]"
               />
@@ -485,6 +537,7 @@ function Viewer() {
                     videoQuality={settings.videoQuality}
                     sounds={settings.sounds}
                     overlay="always"
+                    discreetBlur={settings.discreetBlur}
                     loading={i < 3 ? "eager" : "lazy"}
                     className="w-full max-w-4xl"
                     mediaClassName="max-h-[min(78vh,820px)] max-w-full rounded-lg object-contain shadow-lg"
@@ -507,6 +560,7 @@ function Viewer() {
                 sounds={settings.sounds}
                 showPip
                 overlay="always"
+                discreetBlur={settings.discreetBlur}
                 loading={i < 2 ? "eager" : "lazy"}
                 className="aspect-[4/3] overflow-hidden rounded-2xl border border-border bg-black/40 shadow-lg transition hover:border-primary/40"
                 mediaClassName="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
